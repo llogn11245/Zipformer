@@ -194,7 +194,7 @@ def main():
         train_loss, lr = train_one_epoch(model, train_loader, optimizer, criterion, device, scheduler)
         val_loss = evaluate(model, dev_loader, criterion, device)
 
-        logging.info(f"Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Lr = {lr:.4f}")
+        logging.info(f"Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Lr = {lr:.6f}")
 
         # Save model checkpoint
         if not os.path.exists(training_cfg['save_path']):
