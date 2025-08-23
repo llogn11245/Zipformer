@@ -8,6 +8,8 @@ from zip_models.model import Zipformer
 from zip_utils.dataset import Speech2Text, speech_collate_fn
 from jiwer import wer, cer
 from tqdm import tqdm
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 def load_config(path):
     with open(path, 'r') as f:
