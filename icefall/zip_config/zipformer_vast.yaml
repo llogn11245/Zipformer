@@ -23,7 +23,7 @@ model:
 
 training:
   epochs: 100
-  batch_size: 2
+  batch_size: 6
   save_path: "workspace/Zipformer/saves"
   voice_path: "workspace/dataset/voices"
   train_path : "workspace/dataset/train_w2i.json"
