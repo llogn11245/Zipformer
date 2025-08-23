@@ -79,15 +79,17 @@ def evaluate(model, dataloader, criterion, device):
     with torch.no_grad():
         for batch in progress_bar:
             speech = batch["fbank"].to(device)
-            target_text = batch["text"].to(device)
             speech_mask = batch["fbank_mask"].to(device)
             text_mask = batch["text_mask"].to(device)
             fbank_len = batch["fbank_len"].to(device)
             text_len = batch["text_len"].to(device)
+            target_text = batch["text"].to(device)
             decoder_input = batch["decoder_input"].to(device)
+            tokens = batch["tokens"].to(device)
+            tokens_lens = batch["tokens_lens"].to(device)
 
-            output = model(speech, fbank_len.long(), decoder_input.int(), speech_mask, text_mask)
-            loss = criterion(output, target_text, fbank_len, text_len)
+            output, new_fbank_lens = model(speech, fbank_len.long(), decoder_input.int(), tokens_lens.cpu(), True)
+            loss = criterion(output, tokens, new_fbank_lens, tokens_lens)
 
             total_loss += loss.item()
             progress_bar.set_postfix(batch_loss=loss.item())
