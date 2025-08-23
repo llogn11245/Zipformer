@@ -108,7 +108,7 @@ class Zipformer(nn.Module):
     
     def recognize(self, speech_feature, fbank_lens, use_mask:bool= True):
         batch_size = speech_feature.size(0)
-        enc_states, _ = self.encode(speech_feature, fbank_lens, use_mask)  # [B, T, out_dim]
+        enc_states, enc_lens = self.encode(speech_feature, fbank_lens, use_mask)  # [B, T, out_dim]
 
         zero_token = torch.LongTensor([[1]])
         if speech_feature.is_cuda:
@@ -123,7 +123,6 @@ class Zipformer(nn.Module):
                 out = F.softmax(logits, dim=0).detach()
                 pred = torch.argmax(out, dim=0).item()
 
-                print(pred)
                 if pred == 2: 
                     break
 
@@ -136,7 +135,7 @@ class Zipformer(nn.Module):
 
             return token_list
         
-        results = [infer(enc_states[i], fbank_lens[i]) for i in range(batch_size)]
+        results = [infer(enc_states[i], enc_lens[i]) for i in range(batch_size)]
 
         return results
 
