@@ -1,0 +1,60 @@
+model:
+  conv_embeded: 
+    in_channels: 80         # feature dim
+    out_channels: 192        # = output dim of conv_embeded & It's the input dim of encoder
+    layer1_channels: 8      # keep as paper
+    layer2_channels: 32     # keep as paper
+    layer3_channels: 128    # keep as paper
+    dropout: 0.1
+  encoder:
+  decoder: 
+    type: 'lstm'   
+    embedding_size: 512
+    hidden_size: 512
+    output_size: 256 
+    n_layers: 2
+    dropout: 0.2
+  joint: 
+    input_size: 512
+    hidden_size: 512
+  vocab_size: 4866
+  dropout: 0.3
+  name : 'Zipformer'
+  share_weight: False
+  
+
+training:
+  epochs: 100
+  batch_size: 2
+  save_path: "save"
+  voice_path: "/home/logn/Desktop/workspace/data/VIVOS/voices"
+  train_path : "/home/logn/Desktop/workspace/data/VIVOS/train_w2i.json"
+  dev_path : "/home/logn/Desktop/workspace/data/VIVOS/test_w2i.json"
+  test_path : "/home/logn/Desktop/workspace/data/VIVOS/test_w2i.json"
+  vocab_path : "/home/logn/Desktop/workspace/data/VIVOS/vocab_w2i.json"
+  log_path: "/home/logn/Desktop/workspace/Zipformer/logs"
+  result: "/home/logn/Desktop/workspace/Zipformer/result.txt"
+  reload: False
+
+
+optim:
+  # type: sgd
+  # lr: 0.0005
+  # momentum: 0.9
+  # weight_decay: 0
+  # begin_to_adjust_lr: 60
+  # nesterov: None
+  # decay_rate: 0.5
+
+  type: adam
+  lr: 0.0003
+  weight_decay: 0
+  decay_rate: 0.5
+
+scheduler:
+  lr_initial: 0.0003
+  n_warmup_steps: 15000
+
+rnnt_loss:
+  blank: 0
+  reduction: "mean" 
