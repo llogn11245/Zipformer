@@ -1,7 +1,9 @@
 model:
   conv_embeded: 
-    in_channels: 80         # feature dim
+    feature: 80
+    in_channels: 1         # feature dim
     out_channels: 192        # = output dim of conv_embeded & It's the input dim of encoder
+    dropout_rate: 0.1
   encoder:
   decoder: 
     type: 'lstm'   

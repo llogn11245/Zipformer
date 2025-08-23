@@ -6,7 +6,7 @@ import sys
 import torch.nn.functional as F
 from egs.librispeech.ASR.zipformer.zipformer import Zipformer2
 from egs.librispeech.ASR.zipformer.subsampling import Conv2dSubsampling
-from .modules import Conv2dSubampling
+from .modules import Conv2dSubampling, Linear
 from .decoder import build_decoder
 from zip_utils.dataset import calculate_mask, causal_mask
 
@@ -44,6 +44,11 @@ class Zipformer(nn.Module):
         self.conv_embeded = Conv2dSubampling(
             in_channels=config['conv_embeded']['in_channels'],
             out_channels=config['conv_embeded']['out_channels']
+        )
+
+        self.input_projection = nn.Sequential(
+            Linear(config["conv_embeded"]["out_channels"] * (((config["conv_embeded"]["feature"] - 1) // 2 - 1) // 2), config["conv_embeded"]["encoder_dim"]),
+            nn.Dropout(p=config["conv_embeded"]["dropout_rate"]),
         )
 
         self.encoder = Zipformer2(

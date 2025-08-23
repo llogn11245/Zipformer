@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import math
 from typing import Optional, Callable, Type, List
-
+import torch.nn.init as init
 
 
 def calc_data_len(
@@ -295,7 +295,7 @@ class Conv2dSubampling(nn.Module):
             nn.ReLU(),
         )
 
-    def forward(self, x: Tensor, input_lengths: Tensor):
+    def forward(self, x: torch.Tensor, input_lengths: torch.Tensor):
         x = x.unsqueeze(1)  # (batch, 1, time, dim)
         B, C, T, F = x.shape
         for layer in self.sequential:
@@ -319,3 +319,18 @@ class Conv2dSubampling(nn.Module):
         B, C, T, F = x.shape
         x = x.transpose(1, 2).contiguous().view(B, T, C * F)
         return x, new_len
+    
+class Linear(nn.Module):
+    """
+    Wrapper class of torch.nn.Linear
+    Weight initialize by xavier initialization and bias initialize to zeros.
+    """
+    def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
+        super(Linear, self).__init__()
+        self.linear = nn.Linear(in_features, out_features, bias=bias)
+        init.xavier_uniform_(self.linear.weight)
+        if bias:
+            init.zeros_(self.linear.bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.linear(x)
