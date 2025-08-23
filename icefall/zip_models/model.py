@@ -47,7 +47,7 @@ class Zipformer(nn.Module):
         )
 
         self.input_projection = nn.Sequential(
-            Linear(config["conv_embeded"]["out_channels"] * (((config["conv_embeded"]["feature"] - 1) // 2 - 1) // 2), config["conv_embeded"]["encoder_dim"]),
+            Linear(config["conv_embeded"]["out_channels"] * (((config["conv_embeded"]["feature"] - 1) // 2 - 1) // 2), config["conv_embeded"]["out_channels"]),
             nn.Dropout(p=config["conv_embeded"]["dropout_rate"]),
         )
 
@@ -90,7 +90,8 @@ class Zipformer(nn.Module):
     
     def encode(self, x: torch.Tensor, x_lens: torch.Tensor, use_mask:bool= None):
         x, x_lens = self.conv_embeded(x, x_lens) # [batch, time, features] 
-        
+        x = self.input_projection(x)
+
         if use_mask:
             max_subsampled_len = x.size(1)
             mask = ~calculate_mask(x_lens, max_subsampled_len)
