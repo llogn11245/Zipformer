@@ -4,8 +4,8 @@ import yaml
 import argparse
 import torch
 from torch.utils.data import DataLoader
-from models.model import Transducer
-from utils.dataset import Speech2Text, speech_collate_fn
+from zip_models.model import Zipformer
+from zip_utils.dataset import Speech2Text, speech_collate_fn
 from jiwer import wer, cer
 from tqdm import tqdm
 
@@ -40,7 +40,7 @@ def main():
     state_dict = checkpoint.get('model_state_dict', checkpoint)
 
     #===Load Model===
-    model = Transducer(model_cfg)
+    model = Zipformer(model_cfg)
     model.load_state_dict(state_dict)
     model.to(device)
     model.eval()

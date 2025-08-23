@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 import sys
-
+import torch.nn.functional as F
 from egs.librispeech.ASR.zipformer.zipformer import Zipformer2
 from egs.librispeech.ASR.zipformer.subsampling import Conv2dSubsampling
 

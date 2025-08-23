@@ -10,6 +10,8 @@ from zip_models.optim import Optimizer
 import logging
 from torch import nn
 from speechbrain.nnet.schedulers import NoamScheduler
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 def reload_model(model, optimizer, checkpoint_path, model_name):
     past_epoch = 0
