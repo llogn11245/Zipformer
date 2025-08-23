@@ -2,10 +2,6 @@ model:
   conv_embeded: 
     in_channels: 80         # feature dim
     out_channels: 192        # = output dim of conv_embeded & It's the input dim of encoder
-    layer1_channels: 8      # keep as paper
-    layer2_channels: 32     # keep as paper
-    layer3_channels: 128    # keep as paper
-    dropout: 0.1
   encoder:
   decoder: 
     type: 'lstm'   
@@ -16,7 +12,7 @@ model:
     dropout: 0.2
   joint: 
     input_size: 512
-    hidden_size: 512
+    hidden_size: 320
   vocab_size: 4866
   dropout: 0.3
   name : 'zipformer'

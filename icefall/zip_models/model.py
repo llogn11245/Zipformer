@@ -6,7 +6,7 @@ import sys
 import torch.nn.functional as F
 from egs.librispeech.ASR.zipformer.zipformer import Zipformer2
 from egs.librispeech.ASR.zipformer.subsampling import Conv2dSubsampling
-
+from .modules import Conv2dSubampling
 from .decoder import build_decoder
 from zip_utils.dataset import calculate_mask, causal_mask
 
@@ -41,30 +41,26 @@ class Zipformer(nn.Module):
     def __init__(self, config):
         super().__init__()
            
-        self.conv_embeded = Conv2dSubsampling(
+        self.conv_embeded = Conv2dSubampling(
             in_channels=config['conv_embeded']['in_channels'],
-            out_channels=config['conv_embeded']['out_channels'],
-            layer1_channels=config['conv_embeded']['layer1_channels'],
-            layer2_channels=config['conv_embeded']['layer2_channels'],
-            layer3_channels=config['conv_embeded']['layer3_channels'],
-            dropout=config['conv_embeded']['dropout'],
+            out_channels=config['conv_embeded']['out_channels']
         )
 
         self.encoder = Zipformer2(
             output_downsampling_factor= 2, # keep it intact as code demands
-            downsampling_factor= (1,1,1,1,1,1),  # dont know
-            encoder_dim= (192,256,256,256,256,256),  # paper
-            num_encoder_layers= (2, 2, 2, 2, 2, 2),  # each stage has x2 zipformer blocks
-            encoder_unmasked_dim= (192,256,256,256,256,256),  # recommendeded in code, not really sure it had in paper
+            downsampling_factor= (2,2,2,2),  # dont know
+            encoder_dim= (192,256,256,256),  # paper
+            num_encoder_layers= (2, 2, 2, 2),  # each stage has x2 zipformer blocks
+            encoder_unmasked_dim= (192,256,256,256),  # recommendeded in code, not really sure it had in paper
             query_head_dim= 32,     # paper
             pos_head_dim= 4,
             value_head_dim= 12,     # paper
-            num_heads= (4,4,4,8,4,4),   # paper
-            feedforward_dim= (512,768,768,768,768,768),  # paper
-            cnn_module_kernel= (31,31,15,15,15,31),     # paper
+            num_heads= (4,4,4,4),   # paper
+            feedforward_dim= (512,768,768,768),  # paper
+            cnn_module_kernel= (31,31,15,15),     # paper
             pos_dim= 192,
             dropout= 0.1,  # maybe 
-            warmup_batches= 8000.0, # maybe
+            warmup_batches= 10000.0, # maybe
             causal= True, # maybe 
             chunk_size= [16],  # ?
             left_context_frames= [64],     # maybe

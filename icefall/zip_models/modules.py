@@ -271,40 +271,51 @@ class PositionalEncoding(nn.Module):
         x = x + pe
         return x
 
-class ConvDecBlock(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int = 3, dropout: float = 0.1):
-        super().__init__()
-        self.conv = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, padding=kernel_size // 2)
-        self.norm = nn.LayerNorm(out_channels)
-        self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(dropout)
+class Conv2dSubampling(nn.Module):
+    """
+    Convolutional 2D subsampling (to 1/4 length)
 
-    def forward(self, x):
-        x = self.conv(x.float())  # (batch, out_channels, new_seq_len)
-        x = x.transpose(1, 2)  # (batch, new_seq_len, out_channels)
-        x = self.norm(x)  # (batch, new_seq_len, out_channels)
-        x = self.relu(x)  # (batch, new_seq_len, out_channels)
-        x = self.dropout(x)  # (batch, new_seq_len, out_channels)
-        x = x.transpose(1, 2)
-        return x
+    Args:
+        in_channels (int): Number of channels in the input image
+        out_channels (int): Number of channels produced by the convolution
 
+    Inputs: inputs
+        - **inputs** (batch, time, dim): Tensor containing sequence of inputs
 
-class ConvDec(nn.Module):
-    def __init__(self, num_blocks, in_channels, out_channels, kernel_sizes, dropout=0.1):
-        super().__init__()
-        blocks = []
-        for i in range(num_blocks):
-            conv_block = ConvDecBlock(
-                in_channels, 
-                out_channels[i], 
-                kernel_sizes[i], 
-                dropout)
-            blocks.append(conv_block)
-            in_channels = out_channels[i]
-        self.blocks = nn.ModuleList(blocks)
+    Returns: outputs, output_lengths
+        - **outputs** (batch, time, dim): Tensor produced by the convolution
+        - **output_lengths** (batch): list of sequence output lengths
+    """
+    def __init__(self, in_channels: int, out_channels: int) -> None:
+        super(Conv2dSubampling, self).__init__()
+        self.sequential = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=2),
+            nn.ReLU(),
+        )
 
-    def forward(self, x):
-        for block in self.blocks:
-            x = block(x)
-        x = x.transpose(1, 2)  # (batch, seq_len, out_channels)
-        return x
+    def forward(self, x: Tensor, input_lengths: Tensor):
+        x = x.unsqueeze(1)  # (batch, 1, time, dim)
+        B, C, T, F = x.shape
+        for layer in self.sequential:
+            x = layer(x)
+            if isinstance(layer, nn.Conv2d):
+                k = layer.kernel_size[0]
+                s = layer.stride[0]
+                d = layer.dilation[0]
+                p = layer.padding[0]
+                out_T = (T + 2 * p - d * (k - 1) - 1) // s + 1
+                pad_len = T - input_lengths
+                data_len = input_lengths
+                new_len = calc_data_len(
+                    result_len=out_T,
+                    pad_len=pad_len,
+                    data_len=data_len,
+                    kernel_size=k,
+                    stride=s,
+                )
+                T = out_T
+        B, C, T, F = x.shape
+        x = x.transpose(1, 2).contiguous().view(B, T, C * F)
+        return x, new_len
