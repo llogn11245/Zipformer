@@ -150,8 +150,10 @@ def main():
         collate_fn=speech_collate_fn
     )
 
+    vocab_size = len(train_dataset.vocab)
+
     # ==== Model ====
-    model = Zipformer(config['model'])
+    model = Zipformer(config['model'], vocab_size)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 

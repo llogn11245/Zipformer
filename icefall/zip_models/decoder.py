@@ -48,12 +48,12 @@ class BaseDecoder(nn.Module):
         
         return outputs, hidden
 
-def build_decoder(config):
+def build_decoder(config, vocab_size):
     if config["decoder"]["type"] == 'lstm':
         return BaseDecoder(
             embedding_size=config["decoder"]["embedding_size"],
             hidden_size=config["decoder"]["hidden_size"],
-            vocab_size=config["vocab_size"],
+            vocab_size=vocab_size,
             output_size=config["decoder"]["output_size"],
             n_layers=config["decoder"]["n_layers"],
             dropout=config["dropout"],

@@ -15,7 +15,7 @@ model:
   joint: 
     input_size: 512
     hidden_size: 320
-  vocab_size: 4866
+  # vocab_size: 4866
   dropout: 0.3
   name : 'zipformer'
   share_weight: False

@@ -38,7 +38,7 @@ class JointNet(nn.Module):
         return outputs
     
 class Zipformer(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, vocab_size):
         super().__init__()
            
         self.conv_embeded = Conv2dSubampling(
@@ -76,7 +76,7 @@ class Zipformer(nn.Module):
         self.joint_net = JointNet(
             input_size=config['joint']['input_size'],
             inner_dim=config['joint']['hidden_size'],
-            vocab_size=config['vocab_size']
+            vocab_size=vocab_size
         )
 
     def forward(self, speech, fbank_lens, dec_input, target_lens, use_mask:bool= None):
