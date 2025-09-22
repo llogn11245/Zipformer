@@ -71,7 +71,7 @@ class Zipformer(nn.Module):
             left_context_frames= [64],     # maybe
         )
 
-        self.decoder = build_decoder(config)
+        self.decoder = build_decoder(config, vocab_size)
 
         self.joint_net = JointNet(
             input_size=config['joint']['input_size'],

@@ -122,7 +122,7 @@ def causal_mask(batch_size, size):
 # print(causal_mask(1, 3))
 
 def speech_collate_fn(batch):
-    decoder_outputs = [torch.tensor(item["decoder_input"]) for item in batch]
+    decoder_outputs = [item["decoder_input"].detach().clone() for item in batch]
     texts = [item["text"] for item in batch]
     fbanks = [item["fbank"] for item in batch]
     tokens = [item["tokens"] for item in batch]
