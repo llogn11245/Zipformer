@@ -41,8 +41,11 @@ def main():
     checkpoint = torch.load(full_cfg["training"]["save_path"] + "/zipformer_epoch_11", map_location=device)
     state_dict = checkpoint.get('model_state_dict', checkpoint)
 
+    dataset = Speech2Text(full_cfg["training"]["train_path"], full_cfg["training"]["vocab_path"])
+    vocab_size = len(dataset.vocab)
+
     #===Load Model===
-    model = Zipformer(model_cfg)
+    model = Zipformer(model_cfg, vocab_size)
     model.load_state_dict(state_dict)
     model.to(device)
     model.eval()

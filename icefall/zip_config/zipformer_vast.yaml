@@ -16,15 +16,15 @@ model:
     input_size: 512
     hidden_size: 320
   # vocab_size: 4866
-  dropout: 0.3
+  dropout: 0.1
   name : 'zipformer'
   share_weight: False
   
 
 training:
   epochs: 100
-  batch_size: 6
-  save_path: "workspace/Zipformer/saves"
+  batch_size: 10
+  save_path: "workspace/Zipformer/saves_w2i"
   voice_path: "workspace/dataset/voices"
   train_path : "workspace/dataset/train_w2i.json"
   dev_path : "workspace/dataset/test_w2i.json"
@@ -45,14 +45,14 @@ optim:
   # decay_rate: 0.5
 
   type: adam
-  lr: 0.0003
-  weight_decay: 0
+  lr: 0.001
+  weight_decay: 0.0001
   decay_rate: 0.5
 
 scheduler:
-  lr_initial: 0.0003
-  n_warmup_steps: 15000
+  lr_initial: 0.001
+  n_warmup_steps: 10000
 
 rnnt_loss:
-  blank: 0
+  blank: 4
   reduction: "mean" 
