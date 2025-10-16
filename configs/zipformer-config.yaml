@@ -1,0 +1,53 @@
+training:
+  epochs: 100
+  batch_size: 2
+  save_path: "save"
+  voice_path: "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/voices"
+  train_path : "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/train_w2i.json"
+  dev_path : "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/test_w2i.json"
+  test_path : "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/test_w2i.json"
+  vocab_path : "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/vocab_w2i.json"
+  log_path: "/home/logn/Desktop/workspace/Zipformer/logs"
+  result: "/home/logn/Desktop/workspace/Zipformer/result.txt"
+  reload: False
+
+model:
+  conv_embeded: 
+    conv_dim: [8, 32, 128, 384]
+  enc:
+  dec: 
+    type: 'lstm'   
+    embedding_size: 512
+    hidden_size: 512
+    output_size: 256 
+    n_layers: 2
+    dropout: 0.2
+  joint: 
+    input_size: 512
+    hidden_size: 320
+  # vocab_size: 4866
+  dropout: 0.1
+  name : 'zipformer'
+  share_weight: False
+
+optim:
+  # type: sgd
+  # lr: 0.0005
+  # momentum: 0.9
+  # weight_decay: 0
+  # begin_to_adjust_lr: 60
+  # nesterov: None
+  # decay_rate: 0.5
+
+  type: adam
+  lr: 0.001
+  weight_decay: 0.0001
+  decay_rate: 0.5
+
+scheduler:
+  lr_initial: 0.001
+  n_warmup_steps: 10000
+
+rnnt_loss:
+  blank: 4
+  reduction: "mean" 
