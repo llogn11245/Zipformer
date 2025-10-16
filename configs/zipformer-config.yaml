@@ -17,6 +17,11 @@ model:
     output_dim: 192
     conv_dim: [8, 32, 128, 384]
   enc:
+    input_dim: 192
+    ff_size: 512
+    h: 4
+    n_layers: 6
+    dropout: 0.1
   dec: 
     type: 'lstm'   
     embedding_size: 512

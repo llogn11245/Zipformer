@@ -62,9 +62,9 @@ def main():
         # ])
         # new_mask = calculate_mask(new_lengths, conv_out.size(1))  # (B, T')
 
-        output, new_mask = ZipformerEncoder(model_cfg, vocab_size).forward(speech, fbank_len, speech_mask)
+        output, new_mask, atten_w = ZipformerEncoder(model_cfg, vocab_size).forward(speech, fbank_len)
 
-        print(output.shape, speech_mask.shape, new_mask.shape)
+        print(output.shape, speech_mask.shape, new_mask.shape, atten_w.shape)
         exit()
         
 
