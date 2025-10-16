@@ -6,8 +6,8 @@ import os
 from torch import nn
 from speechbrain.nnet.schedulers import NoamScheduler
 import warnings
-from utils.dataset import Speech2Text, speech_collate_fn
-from model.encoder import ConvEmbeded
+from utils import Speech2Text, speech_collate_fn, calculate_mask, causal_mask
+from model.encoder import ConvEmbeded, ZipformerEncoder
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -39,6 +39,8 @@ def main():
 
     model_cfg = config['model']
     conv_embeded = ConvEmbeded(
+        input_dim=model_cfg['conv_embeded']['input_dim'],
+        output_dim=model_cfg['conv_embeded']['output_dim'],
         conv_dim=model_cfg['conv_embeded']['conv_dim'],
     )
 
@@ -53,8 +55,16 @@ def main():
         tokens = batch["tokens"]
         tokens_lens = batch["tokens_lens"]
 
-        conv_out = conv_embeded(speech)
-        print(conv_out.shape)
+        # conv_out = conv_embeded(speech)
+        # new_lengths = torch.tensor([
+        #     conv_embeded.calculate_output_length(length.item()) 
+        #     for length in fbank_len
+        # ])
+        # new_mask = calculate_mask(new_lengths, conv_out.size(1))  # (B, T')
+
+        output, new_mask = ZipformerEncoder(model_cfg, vocab_size).forward(speech, fbank_len, speech_mask)
+
+        print(output.shape, speech_mask.shape, new_mask.shape)
         exit()
         
 

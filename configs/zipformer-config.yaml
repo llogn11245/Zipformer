@@ -13,6 +13,8 @@ training:
 
 model:
   conv_embeded: 
+    input_dim: 80
+    output_dim: 192
     conv_dim: [8, 32, 128, 384]
   enc:
   dec: 
