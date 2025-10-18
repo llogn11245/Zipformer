@@ -1,9 +1,9 @@
 from .modules import (
     SwooshR, SwooshL, 
-    BiasNorm, FeedForwardBlock,
+    BiasNorm, FeedForwardBlock, NonLinearAttention,
+    # DownsampleLayer, UpsampleLayer, BypassModule
 )
 from .atten import (
-    MultiHeadAttentionBlock,
     MultiHeadAttentionWeight,
 )
 from utils import calculate_mask
@@ -106,10 +106,12 @@ class ConvEmbeded(nn.Module):
         return x
 
 class ZipformerBlock(nn.Module):
-    def __init__(self, input_dim, ff_size, h, p_dropout):
+    def __init__(self, input_dim, ff_size, h, value_head_dim, p_dropout):
         super(ZipformerBlock, self).__init__()
         self.ffn = FeedForwardBlock(d_model=input_dim, d_ff=ff_size, dropout=p_dropout)
         self.mhaw = MultiHeadAttentionWeight(d_model=input_dim, h=h, dropout=p_dropout)
+        self.nla = NonLinearAttention(d_in=input_dim)
+        self.sat = SelfAttention(d_in=input_dim, heads=h, d_h=value_head_dim)
 
     def forward(self, x, x_mask):
         """
@@ -120,9 +122,9 @@ class ZipformerBlock(nn.Module):
         """
         atten_weight = self.mhaw(x, x, x_mask)
 
-        resi = x 
-        x = self.ffn(x)
-        x = x + resi
+        x = x + self.ffn(x)
+        x = x + self.nla(x, atten_weight)
+        x = x + self.sat(x, atten_weight)
 
         return x, atten_weight
 
@@ -135,6 +137,7 @@ class ZipformerEncoder(nn.Module):
         self.ff_size = config['enc']['ff_size']
         self.h = config['enc']['h']
         self.p_dropout = config['enc']['dropout']
+        self.value_head_dim = config['enc']['value_head_dim']
 
         self.conv_embeded = ConvEmbeded(
             input_dim=self.input_dim,
@@ -146,6 +149,7 @@ class ZipformerEncoder(nn.Module):
             input_dim= 192,
             ff_size= self.ff_size,
             h= self.h,
+            value_head_dim= self.value_head_dim,
             p_dropout= self.p_dropout
         )
     def forward(self, x, fbank_len):
