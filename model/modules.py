@@ -197,59 +197,82 @@ class SelfAttention(nn.Module):
         x = self.linear[1](x)  # (B, T, D)
 
         return x
-# class BypassModule(nn.Module):
-#     """
-#     An nn.Module that implements a learnable bypass scale, and also randomized per-sequence
-#     layer-skipping.  The bypass is limited during early stages of training to be close to
-#     "straight-through", i.e. to not do the bypass operation much initially, in order to
-#     force all the modules to learn something.
-#     """
 
-#     def __init__(
-#         self,
-#         embed_dim: int,
-#         skip_rate: FloatLike = 0.0,
-#         straight_through_rate: FloatLike = 0.0,
-#         scale_min: FloatLike = ScheduledFloat((0.0, 0.9), (20000.0, 0.2), default=0),
-#         scale_max: FloatLike = 1.0,
-#     ):
-#         super().__init__()
-#         self.bypass_scale = nn.Parameter(torch.full((embed_dim,), 0.5))
-#         self.skip_rate = copy.deepcopy(skip_rate)
-#         self.straight_through_rate = copy.deepcopy(straight_through_rate)
-#         self.scale_min = copy.deepcopy(scale_min)
-#         self.scale_max = copy.deepcopy(scale_max)
+class LayerNormalization(nn.Module):
 
-#     def _get_bypass_scale(self, batch_size: int):
-#         # returns bypass-scale of shape (num_channels,),
-#         # or (batch_size, num_channels,).  This is actually the
-#         # scale on the non-residual term, so 0 corresponds to bypassing
-#         # this module.
-#         if torch.jit.is_scripting() or torch.jit.is_tracing() or not self.training:
-#             return self.bypass_scale
-#         else:
-#             ans = limit_param_value(
-#                 self.bypass_scale, min=float(self.scale_min), max=float(self.scale_max)
-#             )
-#             skip_rate = float(self.skip_rate)
-#             if skip_rate != 0.0:
-#                 mask = torch.rand((batch_size, 1), device=ans.device) > skip_rate
-#                 ans = ans * mask
-#                 # now ans is of shape (batch_size, num_channels), and is zero for sequences
-#                 # on which we have randomly chosen to do layer-skipping.
-#             straight_through_rate = float(self.straight_through_rate)
-#             if straight_through_rate != 0.0:
-#                 mask = (
-#                     torch.rand((batch_size, 1), device=ans.device)
-#                     < straight_through_rate
-#                 )
-#                 ans = torch.maximum(ans, mask.to(ans.dtype))
-#             return ans
+    def __init__(self, features: int, eps:float=10**-6) -> None:
+        super().__init__()
+        self.eps = eps
+        self.alpha = nn.Parameter(torch.ones(features)) # alpha is a learnable parameter
+        self.bias = nn.Parameter(torch.zeros(features)) # bias is a learnable parameter
 
-#     def forward(self, src_orig: Tensor, src: Tensor):
-#         """
-#         Args: src_orig and src are both of shape (seq_len, batch_size, num_channels)
-#         Returns: something with the same shape as src and src_orig
-#         """
-#         bypass_scale = self._get_bypass_scale(src.shape[1])
-#         return src_orig + (src - src_orig) * bypass_scale
+    def forward(self, x):
+        # x: (batch, seq_len, hidden_size)
+         # Keep the dimension for broadcasting
+        mean = x.mean(dim = -1, keepdim = True) # (batch, seq_len, 1)
+        # Keep the dimension for broadcasting
+        std = x.std(dim = -1, keepdim = True) # (batch, seq_len, 1)
+        # eps is to prevent dividing by zero or when std is very small
+        return self.alpha * (x - mean) / (std + self.eps) + self.bias
+
+class ConvolutionalModule(nn.Module):
+    def __init__(self, d_model, kernel_size, dropout):
+        super(ConvolutionalModule, self).__init__()
+        self.layer_norm = LayerNormalization(d_model)
+        self.pointwise_conv1 = nn.Conv1d(d_model, 2 * d_model, kernel_size=1, stride=1, padding=0)
+        self.glu = nn.GLU(dim=1)
+        self.depthwise_conv = nn.Conv1d(d_model, d_model, kernel_size=kernel_size, stride=1,
+                                        padding=(kernel_size - 1) // 2, groups=d_model)
+        self.batch_norm = nn.BatchNorm1d(d_model)
+        self.swish = Swish()
+        self.pointwise_conv2 = nn.Conv1d(d_model, d_model, kernel_size=1, stride=1, padding=0)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        # x: (batch, time, dim)
+        x = self.layer_norm(x)
+        x = x.transpose(1, 2)  # (batch, dim, time)
+        x = self.pointwise_conv1(x)  # (batch, 2*dim, time)
+        x = self.glu(x)  # (batch, dim, time)
+        x = self.depthwise_conv(x)  # (batch, dim, time)
+        x = self.batch_norm(x)  # (batch, dim, time)
+        x = self.swish(x)  # (batch, dim, time)
+        x = self.pointwise_conv2(x)  # (batch, dim, time)
+        x = self.dropout(x)  # (batch, dim, time)
+        return x.transpose(1, 2)  # (batch, time, dim)
+
+class Swish(nn.Module):
+    def __init__(self):
+        super(Swish, self).__init__()
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+        
+
+class BypassModule(nn.Module):
+    def __init__(self, input_dim, initial_min=0.9, initial_max=1.0, 
+                 final_min=0.2, change_step=20000):
+        super().__init__()
+        self.channels = input_dim
+        self.initial_min = initial_min
+        self.initial_max = initial_max
+        self.final_min = final_min
+        self.change_step = change_step
+        
+        self.c = nn.Parameter(torch.ones(input_dim))
+        
+    def forward(self, x, y, current_step=None):
+        # Nếu đang ở chế độ eval -> luôn dùng final_min
+        if not self.training:
+            min_val = self.final_min
+        else:
+            # Nếu training, điều chỉnh theo current_step
+            if current_step is None:
+                raise ValueError("current_step phải được truyền vào khi training.")
+            min_val = self.initial_min if current_step < self.change_step else self.final_min
+        
+        c_clamped = torch.clamp(self.c, min_val, 1.0)
+        c_clamped = c_clamped.view(1, 1, -1)  # (B, T, D)
+        
+        output = (1 - c_clamped) * x + c_clamped * y
+        
+        return output

@@ -23,6 +23,7 @@ model:
     n_layers: 6
     dropout: 0.1
     value_head_dim: 12
+    kernel_size: 15
   dec: 
     type: 'lstm'   
     embedding_size: 512

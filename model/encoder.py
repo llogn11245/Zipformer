@@ -1,10 +1,12 @@
 from .modules import (
     SwooshR, SwooshL, 
     BiasNorm, FeedForwardBlock, NonLinearAttention,
+    ConvolutionalModule, BypassModule,
     # DownsampleLayer, UpsampleLayer, BypassModule
 )
 from .atten import (
     MultiHeadAttentionWeight,
+    SelfAttention,
 )
 from utils import calculate_mask
 import torch
@@ -106,53 +108,78 @@ class ConvEmbeded(nn.Module):
         return x
 
 class ZipformerBlock(nn.Module):
-    def __init__(self, input_dim, ff_size, h, value_head_dim, p_dropout):
+    def __init__(self, input_dim, ff_size, h, value_head_dim, kernel_size, p_dropout):
         super(ZipformerBlock, self).__init__()
-        self.ffn = FeedForwardBlock(d_model=input_dim, d_ff=ff_size, dropout=p_dropout)
+        self.ffn = nn.ModuleList([
+            FeedForwardBlock(d_model=input_dim, d_ff=ff_size, dropout=p_dropout) for _ in range(3)
+        ])
         self.mhaw = MultiHeadAttentionWeight(d_model=input_dim, h=h, dropout=p_dropout)
         self.nla = NonLinearAttention(d_in=input_dim)
-        self.sat = SelfAttention(d_in=input_dim, heads=h, d_h=value_head_dim)
+        self.sat = nn.ModuleList([
+            SelfAttention(d_in=input_dim, heads=h, d_h=value_head_dim) for _ in range(2)
+        ])
+        self.convo = nn.ModuleList([
+            ConvolutionalModule(d_model=input_dim, kernel_size=kernel_size, dropout=p_dropout) for _ in range(2)
+        ])
+        self.bypass = nn.ModuleList([
+            BypassModule(input_dim) for _ in range(2)
+        ])
+        self.bias_norm = BiasNorm(input_dim)
 
-    def forward(self, x, x_mask):
+    def forward(self, x, x_mask, current_step):
         """
         Zipformer Block:
         args:
             x: (T, B, D)
-            x_mask: (B, 1, T)
+            x_mask: (B, T)
         """
         atten_weight = self.mhaw(x, x, x_mask)
+        bypass = x
 
-        x = x + self.ffn(x)
+        x = x + self.ffn[0](x)
         x = x + self.nla(x, atten_weight)
-        x = x + self.sat(x, atten_weight)
+        x = x + self.sat[0](x, atten_weight)
+        x = x + self.convo[0](x)
+        x = x + self.ffn[1](x)
+
+        x = self.bypass[0](x, bypass, current_step)
+
+        x = x + self.sat[1](x, atten_weight)
+        x = x + self.convo[1](x)
+        x = x + self.ffn[2](x)
+        x = self.bias_norm(x)
+        
+        x = self.bypass[1](x, bypass, current_step)
 
         return x, atten_weight
 
 class ZipformerEncoder(nn.Module):
     def __init__(self, config, vocab_size):
         super(ZipformerEncoder, self).__init__()
-        self.input_dim = config['conv_embeded']['input_dim']
-        self.output_dim = config['conv_embeded']['output_dim']
-        self.conv_dim = config['conv_embeded']['conv_dim']
-        self.ff_size = config['enc']['ff_size']
-        self.h = config['enc']['h']
-        self.p_dropout = config['enc']['dropout']
-        self.value_head_dim = config['enc']['value_head_dim']
+        input_dim = config['conv_embeded']['input_dim']
+        output_dim = config['conv_embeded']['output_dim']
+        conv_dim = config['conv_embeded']['conv_dim']
+        ff_size = config['enc']['ff_size']
+        h = config['enc']['h']
+        p_dropout = config['enc']['dropout']
+        value_head_dim = config['enc']['value_head_dim']
+        kernel_size = config['enc']['kernel_size']
 
         self.conv_embeded = ConvEmbeded(
-            input_dim=self.input_dim,
-            output_dim=self.output_dim,
-            conv_dim=self.conv_dim,
+            input_dim= input_dim,
+            output_dim= output_dim,
+            conv_dim= conv_dim,
         )
 
         self.zipblock = ZipformerBlock(
             input_dim= 192,
-            ff_size= self.ff_size,
-            h= self.h,
-            value_head_dim= self.value_head_dim,
-            p_dropout= self.p_dropout
+            ff_size= ff_size,
+            h= h,
+            value_head_dim= value_head_dim,
+            kernel_size= kernel_size,
+            p_dropout= p_dropout
         )
-    def forward(self, x, fbank_len):
+    def forward(self, x, mask, current_step):
         """
         Zipformer Encoder:
         args:
@@ -162,10 +189,11 @@ class ZipformerEncoder(nn.Module):
             output: (B, T', D)
             output_mask: (B, 1, T')
         """
+        fbank_len = mask.sum(dim=-1)  # (B,)
         x = self.conv_embeded(x)  # (B, T', D')
         B, T, D = x.shape
         x_len = torch.tensor([self.conv_embeded.calculate_output_length(length.item()) for length in fbank_len])
         x_mask = calculate_mask(x_len, T)  # (B, T')
 
-        x, atten_w = self.zipblock(x, x_mask)
+        x, atten_w = self.zipblock(x, x_mask, current_step)
         return x, x_mask, atten_w

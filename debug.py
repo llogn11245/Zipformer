@@ -43,7 +43,7 @@ def main():
         output_dim=model_cfg['conv_embeded']['output_dim'],
         conv_dim=model_cfg['conv_embeded']['conv_dim'],
     )
-
+    current_step = 0
     for batch in tqdm(train_loader, desc="🔁 Training", leave=False): 
         speech = batch["fbank"]
         speech_mask = batch["fbank_mask"]
@@ -55,14 +55,9 @@ def main():
         tokens = batch["tokens"]
         tokens_lens = batch["tokens_lens"]
 
-        # conv_out = conv_embeded(speech)
-        # new_lengths = torch.tensor([
-        #     conv_embeded.calculate_output_length(length.item()) 
-        #     for length in fbank_len
-        # ])
-        # new_mask = calculate_mask(new_lengths, conv_out.size(1))  # (B, T')
+        output, new_mask, atten_w = ZipformerEncoder(model_cfg, vocab_size).forward(speech, speech_mask, current_step)
 
-        output, new_mask, atten_w = ZipformerEncoder(model_cfg, vocab_size).forward(speech, fbank_len)
+        current_step += 1
 
         print(output.shape, speech_mask.shape, new_mask.shape, atten_w.shape)
         exit()
