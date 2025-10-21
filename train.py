@@ -92,7 +92,7 @@ def evaluate(model, dataloader, criterion, device):
             tokens_lens = batch["tokens_lens"].to(device)
 
             output, new_fbank_lens = model(speech, speech_mask, decoder_input.int(), tokens_lens.cpu(), None)
-            loss = criterion(output, tokens, new_fbank_lens, tokens_lens)
+            loss = criterion(output, tokens, new_fbank_lens.to(device), tokens_lens)
 
             total_loss += loss.item()
             progress_bar.set_postfix(batch_loss=loss.item())

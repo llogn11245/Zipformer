@@ -269,7 +269,6 @@ class BypassModule(nn.Module):
     def forward(self, x, y, current_step=None):
         # Nếu đang ở chế độ eval -> luôn dùng final_min
         if not self.training:
-            print("Eval mode: using final_min for clamping.")
             min_val = self.final_min
         else:
             # Nếu training, điều chỉnh theo current_step
