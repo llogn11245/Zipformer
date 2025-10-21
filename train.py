@@ -138,7 +138,8 @@ def main():
         train_dataset,
         batch_size=training_cfg['batch_size'],
         shuffle=True,
-        collate_fn=speech_collate_fn
+        collate_fn=speech_collate_fn, 
+        num_workers=2
     )
 
     dev_dataset = Speech2Text(
@@ -150,7 +151,8 @@ def main():
         dev_dataset,
         batch_size=training_cfg['batch_size'],
         shuffle=True,
-        collate_fn=speech_collate_fn
+        collate_fn=speech_collate_fn,
+        num_workers=2
     )
 
     vocab_size = len(train_dataset.vocab)
