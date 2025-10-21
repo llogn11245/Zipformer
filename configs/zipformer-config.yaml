@@ -1,29 +1,30 @@
 training:
   epochs: 100
-  batch_size: 2
-  save_path: "save"
+  batch_size: 1
+  save_path: "/home/llogn/workspace/zipformer/saves"
   voice_path: "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/voices"
   train_path : "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/train_w2i.json"
   dev_path : "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/test_w2i.json"
   test_path : "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/test_w2i.json"
   vocab_path : "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/vocab_w2i.json"
-  log_path: "/home/logn/Desktop/workspace/Zipformer/logs"
-  result: "/home/logn/Desktop/workspace/Zipformer/result.txt"
+  log_path: "/home/llogn/workspace/zipformer/logs"
+  result: "/home/llogn/workspace/zipformer/result.txt"
   reload: False
 
 model:
   conv_embeded: 
     input_dim: 80
-    output_dim: 192
+    output_dim: 256
     conv_dim: [8, 32, 128, 384]
   enc:
-    input_dim: 192
     ff_size: 512
     h: 4
-    n_layers: 6
+    n_layers: [2, 2, 2, 2, 2, 2]
     dropout: 0.1
     value_head_dim: 12
     kernel_size: 15
+    downsample: 2
+    upsample: 2
   dec: 
     type: 'lstm'   
     embedding_size: 512
@@ -34,7 +35,6 @@ model:
   joint: 
     input_size: 512
     hidden_size: 320
-  # vocab_size: 4866
   dropout: 0.1
   name : 'zipformer'
   share_weight: False

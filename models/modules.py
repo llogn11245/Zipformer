@@ -64,12 +64,12 @@ class ResidualConnection(nn.Module):
         return self.norm(x + self.dropout(residual))
 
 class DownsampleLayer(nn.Module):
-    def __init__(self, k_factor: int):
+    def __init__(self, downsample: int):
         super().__init__()
-        self.k_factor = k_factor
-        self.weights = nn.Parameter(torch.zeros(k_factor))
+        self.k_factor = downsample
+        self.weights = nn.Parameter(torch.zeros(downsample))
         
-    def forward(self, x):
+    def forward(self, x, x_lens=None):
         """
         x: (B, T, D)
         Output: (B, ceil(T / k_factor), D)
@@ -91,8 +91,14 @@ class DownsampleLayer(nn.Module):
         
         # Gộp theo trọng số -> mỗi nhóm thành 1 frame
         y = (x * w).sum(dim=2)  # (B, n_group, D)
-        
-        return y
+
+        if x_lens is not None:
+            # Làm tròn lên vì ceil pooling
+            y_lens = torch.div(x_lens + k - 1, k, rounding_mode='floor')
+        else:
+            y_lens = None
+
+        return y, y_lens
 
 class UpsampleLayer(torch.nn.Module):
     def __init__(self, upsample: int):
@@ -263,6 +269,7 @@ class BypassModule(nn.Module):
     def forward(self, x, y, current_step=None):
         # Nếu đang ở chế độ eval -> luôn dùng final_min
         if not self.training:
+            print("Eval mode: using final_min for clamping.")
             min_val = self.final_min
         else:
             # Nếu training, điều chỉnh theo current_step

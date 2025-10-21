@@ -55,11 +55,11 @@ def main():
         tokens = batch["tokens"]
         tokens_lens = batch["tokens_lens"]
 
-        output, new_mask, atten_w = ZipformerEncoder(model_cfg, vocab_size).forward(speech, speech_mask, current_step)
+        output, new_mask= ZipformerEncoder(model_cfg).forward(speech, speech_mask, current_step)
 
         current_step += 1
 
-        print(output.shape, speech_mask.shape, new_mask.shape, atten_w.shape)
+        print(output.shape)
         exit()
         
 

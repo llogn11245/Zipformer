@@ -56,7 +56,7 @@ class MultiHeadAttentionWeight(nn.Module):
         self.w_k = nn.Linear(d_model, d_model, bias=False) # Wk
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, q, k, mask):
+    def forward(self, q, k, mask= None):
         query = self.w_q(q) 
         key = self.w_k(k) 
 

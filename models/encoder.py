@@ -2,7 +2,7 @@ from .modules import (
     SwooshR, SwooshL, 
     BiasNorm, FeedForwardBlock, NonLinearAttention,
     ConvolutionalModule, BypassModule,
-    # DownsampleLayer, UpsampleLayer, BypassModule
+    DownsampleLayer, UpsampleLayer
 )
 from .atten import (
     MultiHeadAttentionWeight,
@@ -126,13 +126,15 @@ class ZipformerBlock(nn.Module):
         ])
         self.bias_norm = BiasNorm(input_dim)
 
-    def forward(self, x, x_mask, current_step):
+    def forward(self, x, x_len, x_mask, current_step):
         """
         Zipformer Block:
         args:
             x: (T, B, D)
             x_mask: (B, T)
         """
+        x_device = x.device
+        x_mask = x_mask.to(x_device)
         atten_weight = self.mhaw(x, x, x_mask)
         bypass = x
 
@@ -151,10 +153,43 @@ class ZipformerBlock(nn.Module):
         
         x = self.bypass[1](x, bypass, current_step)
 
-        return x, atten_weight
+        return x, x_len
+
+class ZipLayer(nn.Module):
+    def __init__(self, input_dim, ff_size, h, value_head_dim, kernel_size, p_dropout, downsample, upsample):
+        super(ZipLayer, self).__init__()
+        self.zipblock = ZipformerBlock(
+            input_dim= input_dim,
+            ff_size= ff_size,
+            h= h,
+            value_head_dim= value_head_dim,
+            kernel_size= kernel_size,
+            p_dropout= p_dropout,
+        )
+        self.downsample = DownsampleLayer(
+            downsample= 3,
+        )
+        self.upsample = UpsampleLayer(
+            upsample= 3,
+        )
+
+    def forward(self, x, x_len, x_mask, current_step):
+        bypass = x
+        x, x_len = self.downsample(x, x_len)
+        x_mask = calculate_mask(x_len, x.size(1))
+        x, x_len = self.zipblock(x, x_len, x_mask, current_step)
+        x = self.upsample(x)
+        x_len = torch.clamp(x_len * self.upsample.upsample, max=bypass.size(1))
+        if x.size(1) > bypass.size(1):
+            x = x[:, :bypass.size(1), :]
+        elif x.size(1) < bypass.size(1):
+            pad_len = bypass.size(1) - x.size(1)
+            x = F.pad(x, (0, 0, 0, pad_len)) 
+
+        return x, x_len
 
 class ZipformerEncoder(nn.Module):
-    def __init__(self, config, vocab_size):
+    def __init__(self, config):
         super(ZipformerEncoder, self).__init__()
         input_dim = config['conv_embeded']['input_dim']
         output_dim = config['conv_embeded']['output_dim']
@@ -164,21 +199,42 @@ class ZipformerEncoder(nn.Module):
         p_dropout = config['enc']['dropout']
         value_head_dim = config['enc']['value_head_dim']
         kernel_size = config['enc']['kernel_size']
+        n_layers = config['enc']['n_layers']
+        downsample = config['enc']['downsample']
+        upsample = config['enc']['upsample']
 
         self.conv_embeded = ConvEmbeded(
             input_dim= input_dim,
             output_dim= output_dim,
             conv_dim= conv_dim,
         )
+        self.zipblock = nn.ModuleList([
+            ZipformerBlock(
+                input_dim= output_dim,
+                ff_size= ff_size,
+                h= h,
+                value_head_dim= value_head_dim,
+                kernel_size= kernel_size,
+                p_dropout= p_dropout,
+            ) for _ in range(n_layers[0])
+        ])
+        self.ziplayers = nn.ModuleList([
+            nn.ModuleList([
+                ZipLayer(
+                    input_dim= output_dim,
+                    ff_size= ff_size,
+                    h= h,
+                    value_head_dim= value_head_dim,
+                    kernel_size= kernel_size,
+                    p_dropout= p_dropout,
+                    downsample= downsample,
+                    upsample= upsample,
+                ) for _ in range(n_layers[i])
+            ]) for i in range(5)
+        ])
+        self.bypass = nn.ModuleList(BypassModule(output_dim) for _ in range(5))
+        self.downsample = DownsampleLayer(downsample= downsample)
 
-        self.zipblock = ZipformerBlock(
-            input_dim= 192,
-            ff_size= ff_size,
-            h= h,
-            value_head_dim= value_head_dim,
-            kernel_size= kernel_size,
-            p_dropout= p_dropout
-        )
     def forward(self, x, mask, current_step):
         """
         Zipformer Encoder:
@@ -194,6 +250,20 @@ class ZipformerEncoder(nn.Module):
         B, T, D = x.shape
         x_len = torch.tensor([self.conv_embeded.calculate_output_length(length.item()) for length in fbank_len])
         x_mask = calculate_mask(x_len, T)  # (B, T')
+        for layer in self.zipblock:
+            x, x_len = layer(x, x_len, x_mask, current_step)
 
-        x, atten_w = self.zipblock(x, x_mask, current_step)
-        return x, x_mask, atten_w
+        for i, ziplayer in enumerate(self.ziplayers):
+            bypass = x
+            for layer in ziplayer:
+                x, x_len = layer(x, x_len, x_mask, current_step)
+            x = self.bypass[i](x, bypass, current_step)
+        x, x_len = self.downsample(x, x_len)
+
+        return x, x_mask, x_len
+
+def build_encoder(config):
+    try: 
+        return ZipformerEncoder(config)
+    except KeyError:
+        raise ValueError(f"Bug in encoder configuration.")
