@@ -23,12 +23,12 @@ unzip -o voices.zip
 cd /
 if [[ "$1" == "phoneme" ]]; then
     echo "Preprocessing for phoneme-based model"
-    python workspace/PhonoASR/dataset/phoneme_construct.py
+    python workspace/Zipformer/utils/phoneme_construct.py
 elif [[ "$1" == "char" ]]; then
     echo "Preprocessing for normal model"
-    python workspace/PhonoASR/dataset/char_construct.py
+    python workspace/Zipformer/utils/char_construct.py
 else
     echo "Preprocessing for normal model"
-    python workspace/PhonoASR/dataset/construct.py
+    python workspace/Zipformer/utils/construct.py
 fi
-mkdir workspace/PhonoASR/saves
+mkdir workspace/Zipformer/saves
