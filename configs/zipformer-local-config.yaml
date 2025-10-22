@@ -19,7 +19,7 @@ model:
   enc:
     ff_size: 512
     h: 4
-    n_layers: [2, 2, 2, 2, 2, 2]
+    n_layers: [2, 2, 2, 2, 2, 3]
     dropout: 0.1
     value_head_dim: 12
     kernel_size: 15

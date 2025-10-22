@@ -1,0 +1,62 @@
+training:
+  epochs: 100
+  batch_size: 8
+  save_path: "workspace/Zipformer/saves"
+  voice_path: "workspace/dataset/voices"
+  train_path : "workspace/dataset/train_w2i.json"
+  dev_path : "workspace/dataset/test_w2i.json"
+  test_path : "workspace/dataset/test_w2i.json"
+  vocab_path : "workspace/dataset/vocab_w2i.json"
+  log_path: "workspace/Zipformer/logs"
+  result: "workspace/Zipformer/result.txt"
+  reload: False
+
+model:
+  conv_embeded: 
+    input_dim: 80
+    output_dim: 256
+    conv_dim: [8, 32, 128, 384]
+  enc:
+    ff_size: 512
+    h: 4
+    n_layers: [2, 2, 2, 2, 2, 2]
+    dropout: 0.1
+    value_head_dim: 12
+    kernel_size: 15
+    downsample: 2
+    upsample: 2
+  dec: 
+    type: 'lstm'   
+    embedding_size: 512
+    hidden_size: 512
+    output_size: 256 
+    n_layers: 2
+    dropout: 0.2
+  joint: 
+    input_size: 512
+    hidden_size: 320
+  dropout: 0.1
+  name : 'zipformer'
+  share_weight: False
+
+optim:
+  # type: sgd
+  # lr: 0.0005
+  # momentum: 0.9
+  # weight_decay: 0
+  # begin_to_adjust_lr: 60
+  # nesterov: None
+  # decay_rate: 0.5
+
+  type: adam
+  lr: 0.001
+  weight_decay: 0.0001
+  decay_rate: 0.5
+
+scheduler:
+  lr_initial: 0.001
+  n_warmup_steps: 10000
+
+rnnt_loss:
+  blank: 4
+  reduction: "mean" 

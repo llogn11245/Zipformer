@@ -7,7 +7,7 @@ from torch import nn
 from speechbrain.nnet.schedulers import NoamScheduler
 import warnings
 from utils import Speech2Text, speech_collate_fn, calculate_mask, causal_mask
-from model.encoder import ConvEmbeded, ZipformerEncoder
+from models.encoder import ConvEmbeded, ZipformerEncoder
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -54,8 +54,8 @@ def main():
         decoder_input = batch["decoder_input"]
         tokens = batch["tokens"]
         tokens_lens = batch["tokens_lens"]
-
-        output, new_mask= ZipformerEncoder(model_cfg).forward(speech, speech_mask, current_step)
+        print(speech.shape)
+        output, new_mask, new_len= ZipformerEncoder(model_cfg).forward(speech, speech_mask, current_step)
 
         current_step += 1
 

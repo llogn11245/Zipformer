@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn   
 import torch.nn.functional as F
 import math
+from torch import Tensor
+import random
 
 class SwooshR(nn.Module):
     def __init__(self):
@@ -24,22 +26,67 @@ class SwooshL(nn.Module):
     def forward(self, x):
         return torch.log1p(torch.exp(x - self.offset)) - self.alpha * x - self.bias
 
+class LimitParamValue(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: Tensor, min: float, max: float):
+        ctx.save_for_backward(x)
+        assert max >= min
+        ctx.min = min
+        ctx.max = max
+        return x  # không thay đổi giá trị
+
+    @staticmethod
+    def backward(ctx, x_grad: Tensor):
+        (x,) = ctx.saved_tensors
+        # Nếu x < min mà grad hướng ra ngoài → đảo dấu
+        x_grad = x_grad * torch.where(
+            torch.logical_and(x_grad > 0, x < ctx.min), -1.0, 1.0
+        )
+        # Nếu x > max mà grad hướng ra ngoài → đảo dấu
+        x_grad *= torch.where(
+            torch.logical_and(x_grad < 0, x > ctx.max), -1.0, 1.0
+        )
+        return x_grad, None, None
+
+
+def limit_param_value(
+    x: Tensor, min: float, max: float, prob: float = 0.6, training: bool = True
+):
+    """Giới hạn gradient của tham số x trong khoảng [min, max] với xác suất prob."""
+    if training and random.random() < prob:
+        return LimitParamValue.apply(x, min, max)
+    else:
+        return x
+
 class BiasNorm(nn.Module):
-    def __init__(self, num_channels, eps=1e-5):
+    def __init__(self, num_channels, eps=1e-5,
+                 log_scale_init=0.0, log_scale_min=-1.5, log_scale_max=1.5):
         super().__init__()
         self.num_channels = num_channels
         self.eps = eps
 
-        # Learnable bias (b): shape (1, 1, D)
+        # Learnable bias: (1, 1, D)
         self.bias = nn.Parameter(torch.zeros(1, 1, num_channels))
-        # Learnable log-scale (γ): scalar
-        self.scale = nn.Parameter(torch.zeros(1))
+
+        self.log_scale = nn.Parameter(torch.tensor(log_scale_init))
+
+        # Giới hạn giá trị của log_scale
+        self.log_scale_min = log_scale_min
+        self.log_scale_max = log_scale_max
 
     def forward(self, x):
+        # Giới hạn log_scale trong khoảng [min, max]
+        log_scale = limit_param_value(
+            self.log_scale,
+            self.log_scale_min,
+            self.log_scale_max,
+            training=self.training
+        )
+
         # x: (B, T, D)
         rms = torch.sqrt(torch.mean((x - self.bias) ** 2, dim=-1, keepdim=True) + self.eps)
+        x = x / rms * torch.exp(log_scale)
 
-        x = x / rms * torch.exp(self.scale)
         return x
 
 class FeedForwardBlock(nn.Module):
@@ -49,10 +96,11 @@ class FeedForwardBlock(nn.Module):
         self.linear_1 = nn.Linear(d_model, d_ff) # w1 and b1
         self.dropout = nn.Dropout(dropout)
         self.linear_2 = nn.Linear(d_ff, d_model) # w2 and b2
+        self.activation = SwooshL()
 
     def forward(self, x):
         # (batch, seq_len, d_model) --> (batch, seq_len, d_ff) --> (batch, seq_len, d_model)
-        return self.linear_2(self.dropout(torch.relu(self.linear_1(x))))
+        return self.linear_2(self.dropout(self.activation(self.linear_1(x))))
 
 class ResidualConnection(nn.Module):
     def __init__(self, features: int, dropout: float) -> None:
@@ -164,46 +212,7 @@ class NonLinearAttention(nn.Module):
         x = self.linear[1](x)
 
         return x
-        
-class SelfAttention(nn.Module):
-    def __init__(
-        self, d_in: int, heads: int, d_h) -> None:
-        super().__init__()
-        self.linear = nn.ModuleList([
-            nn.Linear(d_in, heads * d_h, bias=True),
-            nn.Linear(heads * d_h, d_in, bias=True),
-        ])
-
-    def forward(self, x, atten_weight):
-        """
-        Args:
-          x: (B, T, D) 
-         attn_weights: (B, h, T, T)
-        Returns:
-           a tensor with the same shape as x.
-        """
-        B, T, D = x.shape
-
-        atten_weight = atten_weight.permute(1, 0, 2, 3)  # (h, B, T, T)
-        num_heads = atten_weight.shape[0]
-
-        x = self.linear[0](x)  # (B, T, h * d_h)
-        x = x.reshape(B, T, num_heads, -1).permute(2, 0, 1, 3) # (h, B, T, d_in)
-
-        value_head_dim = x.shape[-1]
-
-        x = torch.matmul(atten_weight, x)
-
-        x = (
-            x.permute(1, 2, 0, 3)
-            .contiguous()
-            .view(x.shape[1], x.shape[2], num_heads * value_head_dim)
-        )
-
-        x = self.linear[1](x)  # (B, T, D)
-
-        return x
-
+     
 class LayerNormalization(nn.Module):
 
     def __init__(self, features: int, eps:float=10**-6) -> None:
@@ -282,3 +291,30 @@ class BypassModule(nn.Module):
         output = (1 - c_clamped) * x + c_clamped * y
         
         return output
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model: int) -> None:
+        super().__init__()
+        self.d_model = d_model
+    def get_pe(self, seq_len: int) -> torch.Tensor:
+        pe = torch.zeros(seq_len, self.d_model)
+        
+        position = torch.arange(0, seq_len, dtype=torch.float).unsqueeze(1) # (seq_len, 1)
+        
+        div_term = torch.exp(torch.arange(0, self.d_model, 2).float() * (-math.log(10000.0) / self.d_model)) # (d_model / 2)
+        
+        pe[:, 0::2] = torch.sin(position * div_term) # sin(position * (10000 ** (2i / d_model))
+        pe[:, 1::2] = torch.cos(position * div_term) # cos(position * (10000 ** (2i / d_model))
+        
+        pe = pe.unsqueeze(0) # (1, seq_len, d_model)
+        return pe
+
+    def forward(self, x):
+        # x is of shape (batch, seq_len, d_model)
+        seq_len = x.size(1)
+        pe = self.get_pe(seq_len).to(x.device)
+        pe = pe.expand_as(x)
+
+        x = x + pe
+
+        return x

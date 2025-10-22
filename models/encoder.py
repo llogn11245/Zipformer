@@ -2,7 +2,8 @@ from .modules import (
     SwooshR, SwooshL, 
     BiasNorm, FeedForwardBlock, NonLinearAttention,
     ConvolutionalModule, BypassModule,
-    DownsampleLayer, UpsampleLayer
+    DownsampleLayer, UpsampleLayer,  
+    PositionalEncoding
 )
 from .atten import (
     MultiHeadAttentionWeight,
@@ -144,14 +145,14 @@ class ZipformerBlock(nn.Module):
         x = x + self.convo[0](x)
         x = x + self.ffn[1](x)
 
-        x = self.bypass[0](x, bypass, current_step)
+        x = self.bypass[0](bypass, x, current_step)
 
         x = x + self.sat[1](x, atten_weight)
         x = x + self.convo[1](x)
         x = x + self.ffn[2](x)
         x = self.bias_norm(x)
         
-        x = self.bypass[1](x, bypass, current_step)
+        x = self.bypass[1](bypass, x, current_step)
 
         return x, x_len
 
@@ -167,10 +168,10 @@ class ZipLayer(nn.Module):
             p_dropout= p_dropout,
         )
         self.downsample = DownsampleLayer(
-            downsample= 3,
+            downsample= downsample,
         )
         self.upsample = UpsampleLayer(
-            upsample= 3,
+            upsample= upsample,
         )
 
     def forward(self, x, x_len, x_mask, current_step):
@@ -208,6 +209,7 @@ class ZipformerEncoder(nn.Module):
             output_dim= output_dim,
             conv_dim= conv_dim,
         )
+        self.pos_enc = PositionalEncoding(d_model= output_dim)
         self.zipblock = nn.ModuleList([
             ZipformerBlock(
                 input_dim= output_dim,
@@ -250,6 +252,9 @@ class ZipformerEncoder(nn.Module):
         B, T, D = x.shape
         x_len = torch.tensor([self.conv_embeded.calculate_output_length(length.item()) for length in fbank_len])
         x_mask = calculate_mask(x_len, T)  # (B, T')
+
+        x = self.pos_enc(x)
+
         for layer in self.zipblock:
             x, x_len = layer(x, x_len, x_mask, current_step)
 
@@ -257,7 +262,8 @@ class ZipformerEncoder(nn.Module):
             bypass = x
             for layer in ziplayer:
                 x, x_len = layer(x, x_len, x_mask, current_step)
-            x = self.bypass[i](x, bypass, current_step)
+            x = self.bypass[i](bypass, x, current_step)
+
         x, x_len = self.downsample(x, x_len)
 
         return x, x_mask, x_len
