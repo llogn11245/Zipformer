@@ -43,8 +43,8 @@ class Zipformer(nn.Module):
             vocab_size=vocab_size
         )
 
-    def forward(self, speech, mask, dec_input, target_lens, current_step):
-        encoder_out, _, encoder_out_lens = self.encode(speech, mask, current_step)
+    def forward(self, speech, mask, dec_input, target_lens):
+        encoder_out, encoder_out_lens = self.encode(speech, mask)
 
         decoder_out, _ = self.decode(dec_input, target_lens)
 
@@ -52,10 +52,10 @@ class Zipformer(nn.Module):
 
         return joint_out, encoder_out_lens
     
-    def encode(self, x, mask, current_step):
-        encoder_out, mask, encoder_out_lens = self.encoder(x, mask, current_step)
+    def encode(self, x, mask):
+        encoder_out, encoder_out_lens = self.encoder(x, mask)
 
-        return encoder_out, mask, encoder_out_lens
+        return encoder_out, encoder_out_lens
     
     def decode(self, dec_input, target_lens= None, hidden= None):
         decoder, hid = self.decoder(dec_input, target_lens, hidden)

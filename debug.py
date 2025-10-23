@@ -7,7 +7,7 @@ from torch import nn
 from speechbrain.nnet.schedulers import NoamScheduler
 import warnings
 from utils import Speech2Text, speech_collate_fn, calculate_mask, causal_mask
-from models.encoder import ConvEmbeded, ZipformerEncoder
+from models.encoder import ZipformerEncoder
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -38,11 +38,7 @@ def main():
     vocab_size = len(train_dataset.vocab)
 
     model_cfg = config['model']
-    conv_embeded = ConvEmbeded(
-        input_dim=model_cfg['conv_embeded']['input_dim'],
-        output_dim=model_cfg['conv_embeded']['output_dim'],
-        conv_dim=model_cfg['conv_embeded']['conv_dim'],
-    )
+
     current_step = 0
     for batch in tqdm(train_loader, desc="🔁 Training", leave=False): 
         speech = batch["fbank"]
@@ -54,12 +50,12 @@ def main():
         decoder_input = batch["decoder_input"]
         tokens = batch["tokens"]
         tokens_lens = batch["tokens_lens"]
-        print(speech.shape)
-        output, new_mask, new_len= ZipformerEncoder(model_cfg).forward(speech, speech_mask, current_step)
+
+        output, x_len= ZipformerEncoder(model_cfg).forward(speech, speech_mask)
 
         current_step += 1
 
-        print(output.shape)
+        print(output.shape, x_len)
         exit()
         
 

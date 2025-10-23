@@ -16,6 +16,7 @@ model:
     input_dim: 80
     output_dim: 256
     conv_dim: [8, 32, 128, 384]
+    dropout: 0.1
   enc:
     ff_size: 512
     h: 4

@@ -37,7 +37,6 @@ def reload_model(model, optimizer, checkpoint_path, model_name):
 def train_one_epoch(model, dataloader, optimizer, criterion, device, scheduler):
     model.train()
     total_loss = 0.0
-    current_step = 0
     progress_bar = tqdm(dataloader, desc="🔁 Training", leave=False)
 
     for batch in progress_bar:
@@ -52,7 +51,7 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, scheduler):
         tokens_lens = batch["tokens_lens"].to(device)
         optimizer.zero_grad()
         
-        output, new_fbank_lens = model(speech, speech_mask, decoder_input.int(), tokens_lens.cpu(), current_step)
+        output, new_fbank_lens = model(speech, speech_mask, decoder_input.int(), tokens_lens.cpu())
 
         loss = criterion(output, tokens, new_fbank_lens.to(device), tokens_lens)
         loss.backward()
@@ -65,7 +64,6 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, scheduler):
         lr , _ = scheduler(optimizer.optimizer)
 
         total_loss += loss.item()
-        current_step += 1
         progress_bar.set_postfix(batch_loss=loss.item())
 
     avg_loss = total_loss / len(dataloader)
@@ -91,7 +89,7 @@ def evaluate(model, dataloader, criterion, device):
             tokens = batch["tokens"].to(device)
             tokens_lens = batch["tokens_lens"].to(device)
 
-            output, new_fbank_lens = model(speech, speech_mask, decoder_input.int(), tokens_lens.cpu(), None)
+            output, new_fbank_lens = model(speech, speech_mask, decoder_input.int(), tokens_lens.cpu())
             loss = criterion(output, tokens, new_fbank_lens.to(device), tokens_lens)
 
             total_loss += loss.item()

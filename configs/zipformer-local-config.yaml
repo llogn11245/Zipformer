@@ -1,6 +1,6 @@
 training:
   epochs: 100
-  batch_size: 1
+  batch_size: 2
   save_path: "/home/llogn/workspace/zipformer/saves"
   voice_path: "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/voices"
   train_path : "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/train_w2i.json"
@@ -14,17 +14,27 @@ training:
 model:
   conv_embeded: 
     input_dim: 80
-    output_dim: 256
-    conv_dim: [8, 32, 128, 384]
-  enc:
-    ff_size: 512
-    h: 4
-    n_layers: [2, 2, 2, 2, 2, 3]
+    output_dim: 192
+    conv_dims: [8, 32, 128]
     dropout: 0.1
-    value_head_dim: 12
-    kernel_size: 15
-    downsample: 2
-    upsample: 2
+  enc:
+    output_downsampling_factor: 2
+    downsampling_factor: [2, 2, 2, 2]
+    encoder_dim: [192,256,256,256]
+    num_encoder_layers: [2, 2, 2, 2]
+    encoder_unmasked_dim: [192,256,256,256]
+    query_head_dim: 32
+    pos_head_dim: 4
+    value_head_dim: 12     # paper
+    num_heads: [4,4,4,4]  # paper
+    feedforward_dim: [512,768,768,768]  # paper
+    cnn_module_kernel: [31,31,15,15]     # paper
+    pos_dim: 192
+    dropout: 0.1  
+    warmup_batches: 10000.0
+    causal: True
+    chunk_size: [16]
+    left_context_frames: [64]  
   dec: 
     type: 'lstm'   
     embedding_size: 512
