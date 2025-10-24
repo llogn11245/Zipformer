@@ -64,7 +64,7 @@ class Zipformer(nn.Module):
     
     def recognize(self, speech_feature, mask):
         batch_size = speech_feature.size(0)
-        enc_states, enc_mask, enc_lens = self.encode(speech_feature, mask, None)  # [B, T, out_dim]
+        enc_states, enc_lens = self.encode(speech_feature, mask)  # [B, T, out_dim]
 
         zero_token = torch.LongTensor([[1]])
         if speech_feature.is_cuda:

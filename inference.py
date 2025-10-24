@@ -29,6 +29,7 @@ def ids_to_text(ids, itos, eos_id=None):
 def main():
     parser = argparse.ArgumentParser(description="Inference script for RNN-T speech-to-text model")
     parser.add_argument('--config', required=True, help='Path to YAML config file')
+    parser.add_argument('--epoch', type=int, default=1, help='Epoch number to load the model from')
     parser.add_argument('--result', action='store_true',help='If set, save inference results to file, otherwise only print')
     args = parser.parse_args()
 
@@ -38,7 +39,8 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     #===Load Checkpoint===
-    checkpoint = torch.load(full_cfg["training"]["save_path"] + "/zipformer_epoch_11", map_location=device)
+    epoch = args.epoch
+    checkpoint = torch.load(full_cfg["training"]["save_path"] + full_cfg["model"]["name"] + f"_epoch_{epoch}", map_location=device)
     state_dict = checkpoint.get('model_state_dict', checkpoint)
 
     dataset = Speech2Text(full_cfg["training"]["train_path"], full_cfg["training"]["vocab_path"])
@@ -74,7 +76,7 @@ def main():
         speech_mask = batch["fbank_mask"].to(device)
 
         with torch.no_grad():
-            batch_preds = model.recognize(fbanks, speech_mask, None)
+            batch_preds = model.recognize(fbanks, speech_mask)
 
         for i in range(len(batch_preds)):
             pred_ids = batch_preds[i]
