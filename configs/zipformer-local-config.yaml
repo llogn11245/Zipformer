@@ -13,9 +13,16 @@ training:
 
 model:
   conv_embeded: 
-    input_dim: 80
-    output_dim: 192
-    conv_dims: [8, 32, 128]
+    # input_dim: 80
+    output_dim: 640
+    # conv_dims: [8, 32, 128]
+    # dropout: 0.1
+    num_blocks: 2
+    num_layers_per_block: 1
+    out_channels: [64, 32]
+    kernel_sizes: [3,3]
+    strides: [2,2]
+    residuals: [False, False]
     dropout: 0.1
   enc:
     output_downsampling_factor: 2
@@ -46,7 +53,7 @@ model:
     input_size: 512
     hidden_size: 320
   dropout: 0.1
-  name : 'zipformer'
+  name : 'Zipformer'
   share_weight: False
 
 optim:

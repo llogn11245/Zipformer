@@ -21,7 +21,7 @@ import logging
 import math
 import random
 import warnings
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Callable
 from utils.dataset import calculate_mask
 import torch
 from .modules import (
@@ -53,7 +53,7 @@ from .modules import Conv2dSubsampling
 class ZipformerEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
-        conv_dims = config['conv_embeded']['conv_dims']
+        # conv_dims = config['conv_embeded']['conv_dims']
         output_downsampling_factor = self._to_tuple(config['enc']['output_downsampling_factor'])
         downsampling_factor = self._to_tuple(config['enc']['downsampling_factor'])
         encoder_dim = self._to_tuple(config['enc']['encoder_dim'])
@@ -72,12 +72,25 @@ class ZipformerEncoder(nn.Module):
         chunk_size = self._to_tuple(config['enc']['chunk_size'])
         left_context_frames = self._to_tuple(config['enc']['left_context_frames'])
 
+        # self.conv_embeded = Conv2dSubsampling(
+        #     in_channels= config['conv_embeded']['input_dim'],
+        #     out_channels= config['conv_embeded']['output_dim'], 
+        #     layer1_channels= conv_dims[0],
+        #     layer2_channels= conv_dims[1],
+        #     layer3_channels= conv_dims[2],
+        #     dropout= config['conv_embeded']['dropout'],
+        # )
+
         self.conv_embeded = Conv2dSubsampling(
-            in_channels= config['conv_embeded']['input_dim'],
-            out_channels= config['conv_embeded']['output_dim'], 
-            layer1_channels= conv_dims[0],
-            layer2_channels= conv_dims[1],
-            layer3_channels= conv_dims[2],
+            in_channels=1,
+            num_blocks= config['conv_embeded']['num_blocks'],
+            num_layers_per_block= config['conv_embeded']['num_layers_per_block'],
+            out_channels= config['conv_embeded']['out_channels'],
+            kernel_sizes= config['conv_embeded']['kernel_sizes'],
+            strides= config['conv_embeded']['strides'],
+            residuals= config['conv_embeded']['residuals'],
+            activation=nn.ReLU,        
+            norm=nn.BatchNorm2d,            
             dropout= config['conv_embeded']['dropout'],
         )
 
@@ -100,17 +113,22 @@ class ZipformerEncoder(nn.Module):
             chunk_size=chunk_size,
             left_context_frames=left_context_frames,
         )
+
+        self.in_proj = nn.Linear(config['conv_embeded']['output_dim'], encoder_dim[0])
     
     @staticmethod
     def _to_tuple(x):
         return tuple(x) if isinstance(x, list) else x
 
     def forward(self, x, x_mask):
-        x_len = x_mask.sum(dim=-1)
-        x = self.conv_embeded(x, x_len)
-        conv_out, conv_len = x[0], x[1]
+        x = x.unsqueeze(1)  # (B, 1, T, D)
+        conv_out, conv_mask = self.conv_embeded(x, x_mask)
+        conv_out = conv_out.transpose(1,2).contiguous()  # (B, T, D)
+        conv_out = conv_out.reshape(conv_out.shape[0], conv_out.shape[1], -1)
+        conv_len = conv_mask.sum(dim=1)
 
         conv_mask = ~calculate_mask(conv_len, conv_out.size(1))
+        conv_out = self.in_proj(conv_out)
         # print(conv_out.shape, conv_len, conv_mask.shape)
         # exit()
         B, T, D = conv_out.shape

@@ -54,6 +54,8 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, scheduler):
         output, new_fbank_lens = model(speech, speech_mask, decoder_input.int(), tokens_lens.cpu())
 
         loss = criterion(output, tokens, new_fbank_lens.to(device), tokens_lens)
+        print(loss)
+        exit()
         loss.backward()
         
 
@@ -116,7 +118,7 @@ def main():
     # ==== Logger ====
     if not os.path.exists(training_cfg['log_path']):
         os.makedirs(training_cfg['log_path'])
-    log_file = training_cfg['log_path'] + '/zipformer.log'
+    log_file = training_cfg['log_path'] + '/Zipformer.log'
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(message)s",

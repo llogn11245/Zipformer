@@ -18,7 +18,7 @@
 import logging
 import math
 import random
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Type, List, Callable
 import warnings
 from contextlib import contextmanager
 from packaging import version
@@ -1909,217 +1909,394 @@ class ConvNeXt(nn.Module):
         x = bypass + x
         return x, cached_left_pad
 
+# class Conv2dSubsampling(nn.Module):
+#     """Convolutional 2D subsampling (to 1/2 length).
 
-class Conv2dSubsampling(nn.Module):
-    """Convolutional 2D subsampling (to 1/2 length).
+#     Convert an input of shape (N, T, idim) to an output
+#     with shape (N, T', odim), where
+#     T' = (T-3)//2 - 2 == (T-7)//2
 
-    Convert an input of shape (N, T, idim) to an output
-    with shape (N, T', odim), where
-    T' = (T-3)//2 - 2 == (T-7)//2
+#     It is based on
+#     https://github.com/espnet/espnet/blob/master/espnet/nets/pytorch_backend/transformer/subsampling.py  # noqa
+#     """
 
-    It is based on
-    https://github.com/espnet/espnet/blob/master/espnet/nets/pytorch_backend/transformer/subsampling.py  # noqa
-    """
+#     def __init__(
+#         self,
+#         in_channels: int,
+#         out_channels: int,
+#         layer1_channels: int = 8,
+#         layer2_channels: int = 32,
+#         layer3_channels: int = 128,
+#         dropout: FloatLike = 0.1,
+#     ) -> None:
+#         """
+#         Args:
+#           in_channels:
+#             Number of channels in. The input shape is (N, T, in_channels).
+#             Caution: It requires: T >=7, in_channels >=7
+#           out_channels
+#             Output dim. The output shape is (N, (T-3)//2, out_channels)
+#           layer1_channels:
+#             Number of channels in layer1
+#           layer1_channels:
+#             Number of channels in layer2
+#           bottleneck:
+#             bottleneck dimension for 1d squeeze-excite
+#         """
+#         assert in_channels >= 7
+#         super().__init__()
 
+#         # The ScaleGrad module is there to prevent the gradients
+#         # w.r.t. the weight or bias of the first Conv2d module in self.conv from
+#         # exceeding the range of fp16 when using automatic mixed precision (amp)
+#         # training.  (The second one is necessary to stop its bias from getting
+#         # a too-large gradient).
+
+#         self.conv = nn.Sequential(
+#             nn.Conv2d(
+#                 in_channels=1,
+#                 out_channels=layer1_channels,
+#                 kernel_size=3,
+#                 padding=(0, 1),  # (time, freq)
+#             ),
+#             ScaleGrad(0.2),
+#             Balancer(layer1_channels, channel_dim=1, max_abs=1.0),
+#             SwooshR(),
+#             nn.Conv2d(
+#                 in_channels=layer1_channels,
+#                 out_channels=layer2_channels,
+#                 kernel_size=3,
+#                 stride=2,
+#                 padding=0,
+#             ),
+#             Balancer(layer2_channels, channel_dim=1, max_abs=4.0),
+#             SwooshR(),
+#             nn.Conv2d(
+#                 in_channels=layer2_channels,
+#                 out_channels=layer3_channels,
+#                 kernel_size=3,
+#                 stride=(1, 2),  # (time, freq)
+#             ),
+#             Balancer(layer3_channels, channel_dim=1, max_abs=4.0),
+#             SwooshR(),
+#         )
+
+#         # just one convnext layer
+#         self.convnext = ConvNeXt(layer3_channels, kernel_size=(7, 7))
+
+#         # (in_channels-3)//4
+#         self.out_width = (((in_channels - 1) // 2) - 1) // 2
+#         self.layer3_channels = layer3_channels
+
+#         self.out = nn.Linear(self.out_width * layer3_channels, out_channels)
+#         # use a larger than normal grad_scale on this whitening module; there is
+#         # only one such module, so there is not a concern about adding together
+#         # many copies of this extra gradient term.
+#         self.out_whiten = Whiten(
+#             num_groups=1,
+#             whitening_limit=ScheduledFloat((0.0, 4.0), (20000.0, 8.0), default=4.0),
+#             prob=(0.025, 0.25),
+#             grad_scale=0.02,
+#         )
+
+#         # max_log_eps=0.0 is to prevent both eps and the output of self.out from
+#         # getting large, there is an unnecessary degree of freedom.
+#         self.out_norm = BiasNorm(out_channels)
+#         self.dropout = Dropout3(dropout, shared_dim=1)
+
+#     def forward(
+#         self, x: torch.Tensor, x_lens: torch.Tensor
+#     ) -> Tuple[torch.Tensor, torch.Tensor]:
+#         """Subsample x.
+
+#         Args:
+#           x:
+#             Its shape is (N, T, idim).
+#           x_lens:
+#             A tensor of shape (batch_size,) containing the number of frames in
+
+#         Returns:
+#           - a tensor of shape (N, (T-7)//2, odim)
+#           - output lengths, of shape (batch_size,)
+#         """
+#         # On entry, x is (N, T, idim)
+#         x = x.unsqueeze(1)  # (N, T, idim) -> (N, 1, T, idim) i.e., (N, C, H, W)
+#         # scaling x by 0.1 allows us to use a larger grad-scale in fp16 "amp" (automatic mixed precision)
+#         # training, since the weights in the first convolution are otherwise the limiting factor for getting infinite
+#         # gradients.
+#         x = self.conv(x)
+#         x = self.convnext(x)
+
+#         # Now x is of shape (N, odim, (T-7)//2, (idim-3)//4)
+#         b, c, t, f = x.size()
+
+#         x = x.transpose(1, 2).reshape(b, t, c * f)
+#         # now x: (N, (T-7)//2, out_width * layer3_channels))
+
+#         x = self.out(x)
+#         # Now x is of shape (N, (T-7)//2, odim)
+#         x = self.out_whiten(x)
+#         x = self.out_norm(x)
+#         x = self.dropout(x)
+
+#         if torch.jit.is_scripting() or torch.jit.is_tracing():
+#             x_lens = (x_lens - 7) // 2
+#         else:
+#             with warnings.catch_warnings():
+#                 warnings.simplefilter("ignore")
+#                 x_lens = (x_lens - 7) // 2
+#         assert x.size(1) == x_lens.max().item(), (x.size(1), x_lens.max())
+
+#         return x, x_lens
+
+#     def streaming_forward(
+#         self,
+#         x: torch.Tensor,
+#         x_lens: torch.Tensor,
+#         cached_left_pad: Tensor,
+#     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+#         """Subsample x.
+
+#         Args:
+#           x:
+#             Its shape is (N, T, idim).
+#           x_lens:
+#             A tensor of shape (batch_size,) containing the number of frames in
+
+#         Returns:
+#           - a tensor of shape (N, (T-7)//2, odim)
+#           - output lengths, of shape (batch_size,)
+#           - updated cache
+#         """
+#         # On entry, x is (N, T, idim)
+#         x = x.unsqueeze(1)  # (N, T, idim) -> (N, 1, T, idim) i.e., (N, C, H, W)
+
+#         # T' = (T-7)//2
+#         x = self.conv(x)
+
+#         # T' = (T-7)//2-3
+#         x, cached_left_pad = self.convnext.streaming_forward(
+#             x, cached_left_pad=cached_left_pad
+#         )
+
+#         # Now x is of shape (N, odim, T', ((idim-1)//2 - 1)//2)
+#         b, c, t, f = x.size()
+
+#         x = x.transpose(1, 2).reshape(b, t, c * f)
+#         # now x: (N, T', out_width * layer3_channels))
+
+#         x = self.out(x)
+#         # Now x is of shape (N, T', odim)
+#         x = self.out_norm(x)
+
+#         if torch.jit.is_scripting() or torch.jit.is_tracing():
+#             assert self.convnext.padding[0] == 3
+#             # The ConvNeXt module needs 3 frames of right padding after subsampling
+#             x_lens = (x_lens - 7) // 2 - 3
+#         else:
+#             with warnings.catch_warnings():
+#                 warnings.simplefilter("ignore")
+#                 # The ConvNeXt module needs 3 frames of right padding after subsampling
+#                 assert self.convnext.padding[0] == 3
+#                 x_lens = (x_lens - 7) // 2 - 3
+
+#         assert x.size(1) == x_lens.max().item(), (x.shape, x_lens.max())
+
+#         return x, x_lens, cached_left_pad
+
+#     @torch.jit.export
+#     def get_init_states(
+#         self,
+#         batch_size: int = 1,
+#         device: torch.device = torch.device("cpu"),
+#     ) -> Tensor:
+#         """Get initial states for Conv2dSubsampling module.
+#         It is the cached left padding for ConvNeXt module,
+#         of shape (batch_size, num_channels, left_pad, num_freqs)
+#         """
+#         left_pad = self.convnext.padding[0]
+#         freq = self.out_width
+#         channels = self.layer3_channels
+#         cached_embed_left_pad = torch.zeros(batch_size, channels, left_pad, freq).to(
+#             device
+#         )
+
+#         return cached_embed_left_pad
+
+
+class ConvBlock(nn.Module):
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
-        layer1_channels: int = 8,
-        layer2_channels: int = 32,
-        layer3_channels: int = 128,
-        dropout: FloatLike = 0.1,
-    ) -> None:
-        """
-        Args:
-          in_channels:
-            Number of channels in. The input shape is (N, T, in_channels).
-            Caution: It requires: T >=7, in_channels >=7
-          out_channels
-            Output dim. The output shape is (N, (T-3)//2, out_channels)
-          layer1_channels:
-            Number of channels in layer1
-          layer1_channels:
-            Number of channels in layer2
-          bottleneck:
-            bottleneck dimension for 1d squeeze-excite
-        """
-        assert in_channels >= 7
+        num_layers: int,
+        kernel_size: int = 3,
+        stride: int = 1,
+        dilation: int = 1,
+        residual: bool = False,
+        conv_module: Type[nn.Module] = nn.Conv2d,
+        activation: Callable = nn.LeakyReLU,  # 👉 Dùng LeakyReLU
+        norm: Optional[Type[nn.Module]] = nn.BatchNorm2d,
+        dropout: float = 0.1
+    ):
         super().__init__()
+        layers = []
+        for i in range(num_layers):
+            conv_stride = stride if i == num_layers - 1 else 1
+            conv = conv_module(
+                in_channels=in_channels if i == 0 else out_channels,
+                out_channels=out_channels,
+                kernel_size=kernel_size,
+                stride=conv_stride,
+                dilation=dilation,
+                padding=(kernel_size // 2)
+            )
+            layers.append(conv)
+            if norm:
+                layers.append(norm(out_channels))  # Gọi instance
+            layers.append(activation())
+            layers.append(nn.Dropout(dropout))
 
-        # The ScaleGrad module is there to prevent the gradients
-        # w.r.t. the weight or bias of the first Conv2d module in self.conv from
-        # exceeding the range of fp16 when using automatic mixed precision (amp)
-        # training.  (The second one is necessary to stop its bias from getting
-        # a too-large gradient).
+        self.main = nn.Sequential(*layers)
+        self.residual = residual
 
-        self.conv = nn.Sequential(
-            nn.Conv2d(
-                in_channels=1,
-                out_channels=layer1_channels,
-                kernel_size=3,
-                padding=(0, 1),  # (time, freq)
-            ),
-            ScaleGrad(0.2),
-            Balancer(layer1_channels, channel_dim=1, max_abs=1.0),
-            SwooshR(),
-            nn.Conv2d(
-                in_channels=layer1_channels,
-                out_channels=layer2_channels,
-                kernel_size=3,
-                stride=2,
-                padding=0,
-            ),
-            Balancer(layer2_channels, channel_dim=1, max_abs=4.0),
-            SwooshR(),
-            nn.Conv2d(
-                in_channels=layer2_channels,
-                out_channels=layer3_channels,
-                kernel_size=3,
-                stride=(1, 2),  # (time, freq)
-            ),
-            Balancer(layer3_channels, channel_dim=1, max_abs=4.0),
-            SwooshR(),
-        )
-
-        # just one convnext layer
-        self.convnext = ConvNeXt(layer3_channels, kernel_size=(7, 7))
-
-        # (in_channels-3)//4
-        self.out_width = (((in_channels - 1) // 2) - 1) // 2
-        self.layer3_channels = layer3_channels
-
-        self.out = nn.Linear(self.out_width * layer3_channels, out_channels)
-        # use a larger than normal grad_scale on this whitening module; there is
-        # only one such module, so there is not a concern about adding together
-        # many copies of this extra gradient term.
-        self.out_whiten = Whiten(
-            num_groups=1,
-            whitening_limit=ScheduledFloat((0.0, 4.0), (20000.0, 8.0), default=4.0),
-            prob=(0.025, 0.25),
-            grad_scale=0.02,
-        )
-
-        # max_log_eps=0.0 is to prevent both eps and the output of self.out from
-        # getting large, there is an unnecessary degree of freedom.
-        self.out_norm = BiasNorm(out_channels)
-        self.dropout = Dropout3(dropout, shared_dim=1)
-
-    def forward(
-        self, x: torch.Tensor, x_lens: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Subsample x.
-
-        Args:
-          x:
-            Its shape is (N, T, idim).
-          x_lens:
-            A tensor of shape (batch_size,) containing the number of frames in
-
-        Returns:
-          - a tensor of shape (N, (T-7)//2, odim)
-          - output lengths, of shape (batch_size,)
-        """
-        # On entry, x is (N, T, idim)
-        x = x.unsqueeze(1)  # (N, T, idim) -> (N, 1, T, idim) i.e., (N, C, H, W)
-        # scaling x by 0.1 allows us to use a larger grad-scale in fp16 "amp" (automatic mixed precision)
-        # training, since the weights in the first convolution are otherwise the limiting factor for getting infinite
-        # gradients.
-        x = self.conv(x)
-        x = self.convnext(x)
-
-        # Now x is of shape (N, odim, (T-7)//2, (idim-3)//4)
-        b, c, t, f = x.size()
-
-        x = x.transpose(1, 2).reshape(b, t, c * f)
-        # now x: (N, (T-7)//2, out_width * layer3_channels))
-
-        x = self.out(x)
-        # Now x is of shape (N, (T-7)//2, odim)
-        x = self.out_whiten(x)
-        x = self.out_norm(x)
-        x = self.dropout(x)
-
-        if torch.jit.is_scripting() or torch.jit.is_tracing():
-            x_lens = (x_lens - 7) // 2
+        if residual and in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride),
+                norm(out_channels) if norm else nn.Identity(),
+                nn.Dropout(dropout),
+            )
+        elif residual:
+            self.shortcut = nn.Identity()
         else:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                x_lens = (x_lens - 7) // 2
-        assert x.size(1) == x_lens.max().item(), (x.size(1), x_lens.max())
+            self.shortcut = None
 
-        return x, x_lens
+    def forward(self, x, mask):
+        B, C, T, F = x.shape
+        residual_input = x  
 
-    def streaming_forward(
+        for layer in self.main:
+            x = layer(x)
+            if isinstance(layer, nn.Conv2d):
+                k = layer.kernel_size[0]
+                s = layer.stride[0]
+                d = layer.dilation[0]
+                p = layer.padding[0]
+                out_T = (T + 2 * p - d * (k - 1) - 1) // s + 1
+                pad_len = T - mask.sum(dim=1)
+                data_len = mask.sum(dim=1)
+                new_len = calc_data_len(
+                    result_len=out_T,
+                    pad_len=pad_len,
+                    data_len=data_len,
+                    kernel_size=k,
+                    stride=s,
+                )
+                mask = get_mask_from_lens(new_len, out_T)
+                T = out_T
+
+        if self.residual:
+            shortcut = self.shortcut(residual_input)  # 👉 fix chỗ này
+            x = x + shortcut
+
+        return x, mask
+        
+class Conv2dSubsampling(nn.Module):
+    def __init__(
         self,
-        x: torch.Tensor,
-        x_lens: torch.Tensor,
-        cached_left_pad: Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Subsample x.
+        in_channels: int,
+        num_blocks: int,
+        num_layers_per_block: int,
+        out_channels: List[int],
+        kernel_sizes: List[int],
+        strides: List[int],
+        residuals: List[bool],
+        activation: Callable = nn.LeakyReLU, 
+        norm: Optional[Callable] = nn.BatchNorm2d, 
+        dropout: float = 0.1,
+    ):
+        super().__init__()
+        blocks = []
 
-        Args:
-          x:
-            Its shape is (N, T, idim).
-          x_lens:
-            A tensor of shape (batch_size,) containing the number of frames in
+        for i in range(num_blocks):
+            block = ConvBlock(
+                in_channels=in_channels,
+                out_channels=out_channels[i],
+                num_layers=num_layers_per_block,
+                kernel_size=kernel_sizes[i],
+                stride=strides[i],
+                residual=residuals[i],
+                activation=activation,
+                norm=norm,
+                dropout=dropout
+            )
+            blocks.append(block)
+            in_channels = out_channels[i]
 
-        Returns:
-          - a tensor of shape (N, (T-7)//2, odim)
-          - output lengths, of shape (batch_size,)
-          - updated cache
-        """
-        # On entry, x is (N, T, idim)
-        x = x.unsqueeze(1)  # (N, T, idim) -> (N, 1, T, idim) i.e., (N, C, H, W)
+        self.model = nn.ModuleList(blocks)
 
-        # T' = (T-7)//2
-        x = self.conv(x)
+    def forward(self, x, mask):
+        for i, block in enumerate(self.model):
+            x, mask = block(x, mask)
+        return x, mask
 
-        # T' = (T-7)//2-3
-        x, cached_left_pad = self.convnext.streaming_forward(
-            x, cached_left_pad=cached_left_pad
+def calc_data_len(
+    result_len: int,
+    pad_len,
+    data_len,
+    kernel_size: int,
+    stride: int,
+):
+    """Calculates the new data portion size after applying convolution on a padded tensor
+
+    Args:
+
+        result_len (int): The length after the convolution is applied.
+
+        pad_len Union[Tensor, int]: The original padding portion length.
+
+        data_len Union[Tensor, int]: The original data portion legnth.
+
+        kernel_size (int): The convolution kernel size.
+
+        stride (int): The convolution stride.
+
+    Returns:
+
+        Union[Tensor, int]: The new data portion length.
+
+    """
+    if type(pad_len) != type(data_len):
+        raise ValueError(
+            f"""expected both pad_len and data_len to be of the same type
+            but {type(pad_len)}, and {type(data_len)} passed"""
         )
+    inp_len = data_len + pad_len
+    new_pad_len = 0
+    # if padding size less than the kernel size
+    # then it will be convolved with the data.
+    convolved_pad_mask = pad_len >= kernel_size
+    # calculating the size of the discarded items (not convolved)
+    unconvolved = (inp_len - kernel_size) % stride
+    undiscarded_pad_mask = unconvolved < pad_len
+    convolved = pad_len - unconvolved
+    new_pad_len = (convolved - kernel_size) // stride + 1
+    # setting any condition violation to zeros using masks
+    new_pad_len *= convolved_pad_mask
+    new_pad_len *= undiscarded_pad_mask
+    return result_len - new_pad_len
 
-        # Now x is of shape (N, odim, T', ((idim-1)//2 - 1)//2)
-        b, c, t, f = x.size()
+def get_mask_from_lens(lengths, max_len: int):
+    """Creates a mask tensor from lengths tensor.
 
-        x = x.transpose(1, 2).reshape(b, t, c * f)
-        # now x: (N, T', out_width * layer3_channels))
+    Args:
+        lengths (Tensor): The lengths of the original tensors of shape [B].
 
-        x = self.out(x)
-        # Now x is of shape (N, T', odim)
-        x = self.out_norm(x)
+        max_len (int): the maximum lengths.
 
-        if torch.jit.is_scripting() or torch.jit.is_tracing():
-            assert self.convnext.padding[0] == 3
-            # The ConvNeXt module needs 3 frames of right padding after subsampling
-            x_lens = (x_lens - 7) // 2 - 3
-        else:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                # The ConvNeXt module needs 3 frames of right padding after subsampling
-                assert self.convnext.padding[0] == 3
-                x_lens = (x_lens - 7) // 2 - 3
-
-        assert x.size(1) == x_lens.max().item(), (x.shape, x_lens.max())
-
-        return x, x_lens, cached_left_pad
-
-    @torch.jit.export
-    def get_init_states(
-        self,
-        batch_size: int = 1,
-        device: torch.device = torch.device("cpu"),
-    ) -> Tensor:
-        """Get initial states for Conv2dSubsampling module.
-        It is the cached left padding for ConvNeXt module,
-        of shape (batch_size, num_channels, left_pad, num_freqs)
-        """
-        left_pad = self.convnext.padding[0]
-        freq = self.out_width
-        channels = self.layer3_channels
-        cached_embed_left_pad = torch.zeros(batch_size, channels, left_pad, freq).to(
-            device
-        )
-
-        return cached_embed_left_pad
+    Returns:
+        Tensor: The mask of shape [B, max_len] and True whenever the index in the data portion.
+    """
+    indices = torch.arange(max_len).to(lengths.device)
+    indices = indices.expand(len(lengths), max_len)
+    return indices < lengths.unsqueeze(dim=1)
