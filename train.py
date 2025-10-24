@@ -54,8 +54,7 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, scheduler):
         output, new_fbank_lens = model(speech, speech_mask, decoder_input.int(), tokens_lens.cpu())
 
         loss = criterion(output, tokens, new_fbank_lens.to(device), tokens_lens)
-        print(loss)
-        exit()
+
         loss.backward()
         
 
