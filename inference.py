@@ -40,7 +40,7 @@ def main():
 
     #===Load Checkpoint===
     epoch = args.epoch
-    checkpoint = torch.load(full_cfg["training"]["save_path"] + full_cfg["model"]["name"] + f"_epoch_{epoch}", map_location=device)
+    checkpoint = torch.load(full_cfg["training"]["save_path"] + f"/{full_cfg["model"]["name"]}" + f"_epoch_{epoch}", map_location=device)
     state_dict = checkpoint.get('model_state_dict', checkpoint)
 
     dataset = Speech2Text(full_cfg["training"]["train_path"], full_cfg["training"]["vocab_path"])
