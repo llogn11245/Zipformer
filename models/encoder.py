@@ -114,7 +114,15 @@ class ZipformerEncoder(nn.Module):
             left_context_frames=left_context_frames,
         )
 
-        self.in_proj = nn.Linear(config['conv_embeded']['output_dim'], encoder_dim[0])
+        with torch.no_grad():
+            temp = torch.randn(1, 1, 100, config['conv_embeded']['input_dim']) # (B, 1, T, D)
+            temp_mask = torch.ones(1, 100).bool()
+            conv_out, conv_mask = self.conv_embeded(temp, temp_mask)
+            conv_out = conv_out.transpose(1,2).contiguous()  # (B, T, C, D)
+            conv_out = conv_out.reshape(conv_out.shape[0], conv_out.shape[1], -1) # (B, T, C*D)
+            self.conv_out_dim = conv_out.shape[2]
+
+        self.in_proj = nn.Linear(self.conv_out_dim, encoder_dim[0])
     
     @staticmethod
     def _to_tuple(x):

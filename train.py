@@ -136,7 +136,7 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=training_cfg['batch_size'],
-        shuffle=True,
+        shuffle=False,
         collate_fn=speech_collate_fn, 
         num_workers=2
     )

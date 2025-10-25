@@ -13,15 +13,12 @@ training:
 
 model:
   conv_embeded: 
-    # input_dim: 80
-    output_dim: 640
-    # conv_dims: [8, 32, 128]
-    # dropout: 0.1
+    input_dim: 80
     num_blocks: 2
     num_layers_per_block: 1
     out_channels: [64, 32]
     kernel_sizes: [3,3]
-    strides: [2,2]
+    strides: [1,2]
     residuals: [False, False]
     dropout: 0.1
   enc:
