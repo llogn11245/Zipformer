@@ -195,7 +195,6 @@ def main():
         os.makedirs(training_cfg['save_path'])
 
     # ==== Training loop ====
-    num_epochs = training_cfg["epochs"]
     best_val_loss = float('inf')
     min_change = 1e-4
     early_stop_count = 0
@@ -206,6 +205,7 @@ def main():
 
         train_loss, lr = train(model, train_loader, optimizer, criterion, device, scheduler)
         val_loss = evaluate(model, dev_loader, criterion, device)
+        logging.info(f"End of Epoch {start_epoch}: Training Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}, Learning Rate: {lr:.6f}")
 
         if best_val_loss - val_loss > min_change:
             best_val_loss = val_loss
@@ -227,8 +227,8 @@ def main():
             training_cfg['save_path'],
             f"last_epoch_{config['model']['name']}.ckpt"
         ))
+        scheduler.save(os.path.join(training_cfg['save_path'], 'scheduler.ckpt'))
         start_epoch += 1
-        logging.info(f"End of Epoch {start_epoch}: Training Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}, Learning Rate: {lr:.6f}")
         if early_stop_count == max_early_stop:
             logging.info("======= End of traning =======")
             break
