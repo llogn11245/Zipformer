@@ -34,7 +34,7 @@ def reload_model(model, optimizer, checkpoint_path, model_name):
     
     return past_epoch + 1, model, optimizer
 
-def train_one_epoch(model, dataloader, optimizer, criterion, device, scheduler):
+def train(model, dataloader, optimizer, criterion, device, scheduler):
     model.train()
     total_loss = 0.0
     progress_bar = tqdm(dataloader, desc="🔁 Training", leave=False)
@@ -42,10 +42,6 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, scheduler):
     for batch in progress_bar:
         speech = batch["fbank"].to(device)
         speech_mask = batch["fbank_mask"].to(device)
-        text_mask = batch["text_mask"].to(device)
-        fbank_len = batch["fbank_len"].to(device)
-        text_len = batch["text_len"].to(device)
-        target_text = batch["text"].to(device)
         decoder_input = batch["decoder_input"].to(device)
         tokens = batch["tokens"].to(device)
         tokens_lens = batch["tokens_lens"].to(device)
@@ -82,10 +78,6 @@ def evaluate(model, dataloader, criterion, device):
         for batch in progress_bar:
             speech = batch["fbank"].to(device)
             speech_mask = batch["fbank_mask"].to(device)
-            text_mask = batch["text_mask"].to(device)
-            fbank_len = batch["fbank_len"].to(device)
-            text_len = batch["text_len"].to(device)
-            target_text = batch["text"].to(device)
             decoder_input = batch["decoder_input"].to(device)
             tokens = batch["tokens"].to(device)
             tokens_lens = batch["tokens_lens"].to(device)
@@ -190,7 +182,7 @@ def main():
     num_epochs = training_cfg["epochs"]
 
     for epoch in range(start_epoch, num_epochs + 1):
-        train_loss, lr = train_one_epoch(model, train_loader, optimizer, criterion, device, scheduler)
+        train_loss, lr = train(model, train_loader, optimizer, criterion, device, scheduler)
         val_loss = evaluate(model, dev_loader, criterion, device)
 
         logging.info(f"Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Lr = {lr:.6f}")

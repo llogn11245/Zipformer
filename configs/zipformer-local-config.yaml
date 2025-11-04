@@ -9,6 +9,7 @@ training:
   vocab_path : "/mnt/c/paper/raw_data/Vietnamese-Speech-to-Text-datasets/ViVOS/vocab_w2i.json"
   log_path: "/home/llogn/workspace/zipformer/logs"
   result: "/home/llogn/workspace/zipformer/result.txt"
+  tokenizer-level: "char" # word/char/phoneme
   reload: False
 
 model:

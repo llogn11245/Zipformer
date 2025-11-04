@@ -2,7 +2,6 @@ training:
   epochs: 100
   batch_size: 8
   save_path: "workspace/Zipformer/saves"
-  voice_path: "workspace/dataset/voices"
   train_path : "workspace/dataset/train_w2i.json"
   dev_path : "workspace/dataset/test_w2i.json"
   test_path : "workspace/dataset/test_w2i.json"
@@ -23,16 +22,22 @@ model:
     dropout: 0.1
   enc:
     output_downsampling_factor: 2
-    downsampling_factor: [2, 2, 2, 2, 2, 2]
-    encoder_dim: [192,256,256,256,256,256]
+    # downsampling_factor: [2, 2, 2, 2, 2, 2]
+    # encoder_dim: [192,256,256,256,256,256]
+    downsampling_factor: [2,2,3,4,3,2]
+    encoder_dim: [192,256,384,512,384,256]
     num_encoder_layers: [2,2,1,1,1,1]
-    encoder_unmasked_dim: [192,256,256,256,256,256]
+    # encoder_unmasked_dim: [192,256,256,256,256,256]
+    encoder_unmasked_dim: [192,256,384,512,384,256]
     query_head_dim: 32
     pos_head_dim: 4
-    value_head_dim: 12     # paper
-    num_heads: [4,4,4,4,4,4]  # paper
-    feedforward_dim: [512,768,768,768,768,768]  # paper
-    cnn_module_kernel: [15,15,15,15,15,15]     # paper
+    value_head_dim: 12     
+    # num_heads: [4,4,4,4,4,4]  
+    # feedforward_dim: [512,768,768,768,768,768]  
+    # cnn_module_kernel: [15,15,15,15,15,15]     
+    num_heads: [4,4,4,8,4,4] 
+    feedforward_dim: [512,768,1024,1536,1024,768]  
+    cnn_module_kernel: [31,31,15,15,15,31]     
     pos_dim: 192
     dropout: 0.1  
     warmup_batches: 4000.0
@@ -47,10 +52,10 @@ model:
     # encoder_unmasked_dim: [192,256,256,256]
     # query_head_dim: 32
     # pos_head_dim: 4
-    # value_head_dim: 12     # paper
-    # num_heads: [4,4,4,4]  # paper
-    # feedforward_dim: [512,768,768,768]  # paper
-    # cnn_module_kernel: [15,15,15,15]     # paper
+    # value_head_dim: 12     
+    # num_heads: [4,4,4,4]  
+    # feedforward_dim: [512,768,768,768]  
+    # cnn_module_kernel: [15,15,15,15]     
     # pos_dim: 192
     # dropout: 0.1  
     # warmup_batches: 4000.0

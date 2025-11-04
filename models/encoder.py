@@ -72,15 +72,6 @@ class ZipformerEncoder(nn.Module):
         chunk_size = self._to_tuple(config['enc']['chunk_size'])
         left_context_frames = self._to_tuple(config['enc']['left_context_frames'])
 
-        # self.conv_embeded = Conv2dSubsampling(
-        #     in_channels= config['conv_embeded']['input_dim'],
-        #     out_channels= config['conv_embeded']['output_dim'], 
-        #     layer1_channels= conv_dims[0],
-        #     layer2_channels= conv_dims[1],
-        #     layer3_channels= conv_dims[2],
-        #     dropout= config['conv_embeded']['dropout'],
-        # )
-
         self.conv_embeded = Conv2dSubsampling(
             in_channels=1,
             num_blocks= config['conv_embeded']['num_blocks'],
