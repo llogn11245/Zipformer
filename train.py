@@ -128,7 +128,7 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=training_cfg['batch_size'],
-        shuffle=False,
+        shuffle=True,
         collate_fn=speech_collate_fn, 
         num_workers=2
     )
@@ -140,6 +140,19 @@ def main():
 
     dev_loader = torch.utils.data.DataLoader(
         dev_dataset,
+        batch_size=training_cfg['batch_size'],
+        shuffle=True,
+        collate_fn=speech_collate_fn,
+        num_workers=2
+    )
+
+    test_dataset = Speech2Text(
+        json_path=training_cfg['test_path'],
+        vocab_path=training_cfg['vocab_path'],
+    )
+
+    test_loader = torch.utils.data.DataLoader(
+        test_dataset,
         batch_size=training_cfg['batch_size'],
         shuffle=True,
         collate_fn=speech_collate_fn,
@@ -178,31 +191,70 @@ def main():
         checkpoint_path = training_cfg['save_path']
         start_epoch, model, optimizer = reload_model(model, optimizer, checkpoint_path, config['model']['name'])
 
+    if not os.path.exists(training_cfg['save_path']):
+        os.makedirs(training_cfg['save_path'])
+
     # ==== Training loop ====
     num_epochs = training_cfg["epochs"]
+    best_val_loss = float('inf')
+    min_change = 1e-4
+    early_stop_count = 0
+    max_early_stop = training_cfg.get("early_stop", 5)
+    while True: 
+        early_stop_count += 1
+        logging.info(f"Epoch {start_epoch}:")
 
-    for epoch in range(start_epoch, num_epochs + 1):
         train_loss, lr = train(model, train_loader, optimizer, criterion, device, scheduler)
         val_loss = evaluate(model, dev_loader, criterion, device)
 
-        logging.info(f"Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Lr = {lr:.6f}")
-
-        # Save model checkpoint
-        if not os.path.exists(training_cfg['save_path']):
-            os.makedirs(training_cfg['save_path'])
-        model_filename = os.path.join(
-            training_cfg['save_path'],
-            f"{config['model']['name']}_epoch_{epoch}"
-        )
+        if best_val_loss - val_loss > min_change:
+            best_val_loss = val_loss
+            torch.save({
+                'epoch': start_epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+            }, os.path.join(
+                training_cfg['save_path'],
+                f"best_{config['model']['name']}.ckpt"
+            ))
+            early_stop_count = 0
 
         torch.save({
-            'epoch': epoch,
+            'epoch': start_epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-        }, model_filename)
+        }, os.path.join(
+            training_cfg['save_path'],
+            f"last_epoch_{config['model']['name']}.ckpt"
+        ))
+        start_epoch += 1
+        logging.info(f"End of Epoch {start_epoch}: Training Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}, Learning Rate: {lr:.6f}")
+        if early_stop_count == max_early_stop:
+            logging.info("======= End of traning =======")
+            break
 
-        # Step scheduler with validation loss
-        scheduler.save(os.path.join(training_cfg['save_path'], 'scheduler.ckpt'))
+    # for epoch in range(start_epoch, num_epochs + 1):
+    #     train_loss, lr = train(model, train_loader, optimizer, criterion, device, scheduler)
+    #     val_loss = evaluate(model, dev_loader, criterion, device)
+
+    #     logging.info(f"Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Lr = {lr:.6f}")
+
+    #     # Save model checkpoint
+    #     if not os.path.exists(training_cfg['save_path']):
+    #         os.makedirs(training_cfg['save_path'])
+    #     model_filename = os.path.join(
+    #         training_cfg['save_path'],
+    #         f"{config['model']['name']}_epoch_{epoch}"
+    #     )
+
+    #     torch.save({
+    #         'epoch': epoch,
+    #         'model_state_dict': model.state_dict(),
+    #         'optimizer_state_dict': optimizer.state_dict(),
+    #     }, model_filename)
+
+    #     # Step scheduler with validation loss
+    #     scheduler.save(os.path.join(training_cfg['save_path'], 'scheduler.ckpt'))
 
 
 if __name__ == "__main__":

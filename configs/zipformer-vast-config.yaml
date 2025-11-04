@@ -8,6 +8,8 @@ training:
   vocab_path : "workspace/dataset/vocab_w2i.json"
   log_path: "workspace/Zipformer/logs"
   result: "workspace/Zipformer/result.txt"
+  tokenizer-level: "char" # word/char/phoneme
+  early_stop: 5
   reload: False
 
 model:
